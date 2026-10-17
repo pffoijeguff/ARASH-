@@ -114,6 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
     market_stream.add_argument("--symbol", required=True, help="Market symbol, for example BTCIRT")
     market_stream.add_argument("--max-events", type=int, default=0, help="Stop after this many snapshots; 0 streams until interrupted")
     market_stream.add_argument("--max-reconnects", type=int, default=5, help="Maximum consecutive reconnect attempts")
+    market_stream.add_argument("--depth-levels", type=int, default=10, help="Order-book levels per side to include in each JSON event (1-500)")
 
     sync_market = commands.add_parser("market-sync", help="Fetch public OHLCV candles and persist a provenance snapshot locally")
     sync_market.add_argument("--db", required=True)
@@ -443,12 +444,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "market-stream":
             if args.max_events < 0:
                 raise ValueError("--max-events must be zero or a positive integer")
+            if not 1 <= args.depth_levels <= 500:
+                raise ValueError("--depth-levels must be between 1 and 500")
             event_count = 0
             stop_event = asyncio.Event()
 
             async def emit_snapshot(snapshot: Any) -> None:
                 nonlocal event_count
-                _print_json(snapshot.to_dict())
+                _print_json(snapshot.to_dict(depth_limit=args.depth_levels))
                 event_count += 1
                 if args.max_events and event_count >= args.max_events:
                     stop_event.set()
