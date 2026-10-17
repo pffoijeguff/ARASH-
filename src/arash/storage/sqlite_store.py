@@ -544,16 +544,62 @@ class SQLiteStore:
             ).fetchone()[0]
             candle_count = int(conn.execute("SELECT COUNT(*) FROM candles").fetchone()[0])
             markets = int(conn.execute("SELECT COUNT(*) FROM (SELECT DISTINCT symbol,interval FROM candles)").fetchone()[0])
-            snapshots = int(conn.execute("SELECT COUNT(*) FROM market_data_snapshots").fetchone()[0])
+            snapshot_rows = conn.execute("SELECT * FROM market_data_snapshots ORDER BY captured_at,snapshot_id").fetchall()
+            snapshots = len(snapshot_rows)
             observations = int(conn.execute("SELECT COUNT(*) FROM market_data_snapshot_candles").fetchone()[0])
             covered = int(conn.execute(
                 "SELECT COUNT(*) FROM candles c WHERE EXISTS(SELECT 1 FROM market_data_snapshot_candles s WHERE s.symbol=c.symbol AND s.interval=c.interval AND s.event_timestamp=c.timestamp)"
             ).fetchone()[0])
+            snapshot_errors: list[str] = []
+            for snapshot_row in snapshot_rows:
+                snapshot_id = str(snapshot_row["snapshot_id"])
+                try:
+                    manifest = json.loads(snapshot_row["manifest_json"])
+                    if not isinstance(manifest, dict):
+                        raise ValueError("manifest root is not an object")
+                    from arash.data.snapshots import normalized_candle_sha256, snapshot_manifest_digest
+                    manifest_digest = snapshot_manifest_digest(manifest)
+                    if manifest_digest != snapshot_row["snapshot_manifest_sha256"]:
+                        raise ValueError("manifest hash mismatch")
+                    for field, column in (
+                        ("snapshot_id", "snapshot_id"), ("source", "source"), ("symbol", "symbol"),
+                        ("interval", "interval"), ("captured_at", "captured_at"),
+                        ("source_digest_sha256", "source_digest_sha256"),
+                        ("normalized_data_sha256", "normalized_data_sha256"), ("row_count", "row_count"),
+                    ):
+                        if manifest.get(field) != snapshot_row[column]:
+                            raise ValueError(f"manifest field {field} does not match snapshot row")
+                    snapshot_candle_rows = conn.execute(
+                        "SELECT * FROM market_data_snapshot_candles WHERE snapshot_id=? ORDER BY event_timestamp",
+                        (snapshot_id,),
+                    ).fetchall()
+                    if len(snapshot_candle_rows) != int(snapshot_row["row_count"]):
+                        raise ValueError("snapshot row count does not match its candle observations")
+                    from arash.domain.models import Candle
+                    snapshot_candles = [
+                        Candle(
+                            symbol=row["symbol"], interval=row["interval"],
+                            timestamp=datetime.fromisoformat(row["event_timestamp"]),
+                            open=Decimal(row["open"]), high=Decimal(row["high"]),
+                            low=Decimal(row["low"]), close=Decimal(row["close"]),
+                            volume=Decimal(row["volume"]),
+                        )
+                        for row in snapshot_candle_rows
+                    ]
+                    if snapshot_candles:
+                        digest = normalized_candle_sha256(snapshot_candles)
+                        if digest != snapshot_row["normalized_data_sha256"]:
+                            raise ValueError("normalized candle content hash mismatch")
+                except Exception as exc:
+                    snapshot_errors.append(f"{snapshot_id}: {str(exc)[:300]}")
+        snapshot_ok = not snapshot_errors
         return {
             "physical_integrity_ok": bool(physical),
             "foreign_key_integrity_ok": not foreign_keys,
             "provenance_integrity_ok": int(orphan_batches) == 0,
-            "snapshot_integrity_ok": True,
+            "snapshot_integrity_ok": snapshot_ok,
+            "snapshot_integrity_errors": snapshot_errors[:100],
+            "snapshot_integrity_errors_truncated": len(snapshot_errors) > 100,
             "markets": markets,
             "candles": candle_count,
             "market_data_snapshots": snapshots,

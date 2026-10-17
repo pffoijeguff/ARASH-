@@ -12,6 +12,18 @@ Strictly validate rows:
 
     python -m arash csv-validate sample_data/research_demo_320.csv
 
+## Public-data sync and lineage
+
+Fetch a bounded candle history and persist it to a local SQLite database, including its normalized hash and snapshot manifest:
+
+    python -m arash market-sync --db data/market.sqlite3 --symbol BTCIRT --interval 1h --count 100
+
+Reconcile the local ledger and snapshot metadata:
+
+    python -m arash market-reconcile --db data/market.sqlite3
+
+Market retrieval is opt-in. It uses a public read-only endpoint and does not touch trading accounts.
+
 ## Backtesting and robustness
 
 Run a predeclared baseline:

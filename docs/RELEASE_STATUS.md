@@ -3,7 +3,7 @@
 ## Current state
 
 The branch \`source-sync-28.0.0\` contains the project's core offline source areas:
-- CLI for CSV health/validation, public read-only market data, baseline backtesting, holdout evaluation, risk sizing, research grids, regime analysis, market intelligence, and execution sensitivity.
+- CLI for CSV health/validation, public read-only market data and durable `market-sync` snapshots, reconciliation, baseline backtesting, holdout evaluation, risk sizing, research grids, regime analysis, market intelligence, and execution sensitivity.
 - A local SQLite store for candle imports, market-fetch lineage, paper-trade records, research-run records and artifact manifests.
 - A persistent spot paper broker with idempotent client-order identifiers, explicit currency contracts, mandatory risk inputs for buys, paper fills, snapshots and a persistent kill switch.
 - Research utilities for baseline backtests, candidate-family summaries, robustness scenarios, selection-bias diagnostics, manifests, and market-state change observations.
