@@ -24,19 +24,19 @@ Reconcile the local ledger and snapshot metadata:
 
 Market retrieval is opt-in. It uses a public read-only endpoint and does not touch trading accounts.
 
-## Live public order-book stream
+## Live public market stream
 
 Install the optional streaming dependency:
 
     python -m pip install ".[marketstream]"
 
-Receive ten snapshots for one market, showing ten levels per side:
+Receive ten market events for one market, showing ten order-book levels per side with a rolling 60-second trade-flow window:
 
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
-The command connects to the documented public WebSocket endpoint, subscribes to `public:orderbook-SYMBOL`, and requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL`. No API key is needed for this public channel. The feed emits validated JSON snapshots with bid/ask prices and sizes, midpoint, microprice, spread in basis points, receive lag, and top-depth quantity imbalance. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
+The command connects to the documented public WebSocket endpoint, subscribes to `public:orderbook-SYMBOL` and `public:trades-SYMBOL`, and requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL`. No API key is needed for these public channels. The feed emits validated JSON order-book snapshots and trade prints. A bounded feature engine adds rolling buy/sell reported-side volume and notional, notional imbalance, VWAP, latest book metrics and event-time window details. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
 
-The provider publishes order-book messages when the book changes, so quiet markets may have long gaps. The initial REST snapshot gives the stream a starting book; the CLI does not infer a buy/sell recommendation from microstructure fields. Timestamp ordering and provider behavior still need verification before the feed is used as an input to another system.
+The provider publishes order-book messages when the book changes, so quiet markets may have long gaps. Trade messages use the provider's reported `type` field; ARASH does not claim this is a verified aggressor-side classification. Displayed depth can change or disappear, and these features do not infer a buy/sell recommendation. Timestamp ordering, rolling metrics and provider behavior still need verification before the feed is used as an input to another system.
 
 ## Backtesting and robustness
 
