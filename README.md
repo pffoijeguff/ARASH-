@@ -20,7 +20,8 @@ ARASH is designed to grow beyond a collection of indicators or a candle-loop scr
 | Capability | Current source area |
 | --- | --- |
 | Market-data validation, public candles and live order-book streaming | src/arash/data and src/arash/integrations |
-| Live top-of-book, microprice, spread, feed-lag and depth-imbalance observations | src/arash/data/streaming.py |
+| Live order-book and trade streams with rolling flow features | src/arash/data/streaming.py and src/arash/research/streaming_features.py |
+| Microprice, spread, displayed depth imbalance, reported-side trade notional imbalance and rolling VWAP | Live microstructure feature engine |
 | Baseline backtests and chronological holdout evaluation | src/arash/research |
 | Robustness, candidate-family and selection-bias diagnostics | src/arash/research |
 | Market-regime and descriptive market-intelligence reports | CLI and research modules |
@@ -54,7 +55,7 @@ For a live read-only public order-book stream (requires the optional WebSocket d
     python -m pip install ".[marketstream]"
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
-The streaming command subscribes to Nobitex's public WebSocket channel and bootstraps the initial book from the public REST snapshot. It reports market observations only and does not submit orders.
+The streaming command subscribes to Nobitex's public order-book and public-trades channels over one WebSocket connection and bootstraps the initial book from the public REST snapshot. Each event is enriched with bounded rolling trade-flow features. It reports market observations only and does not submit orders.
 
 Browse the [CLI reference](docs/CLI_REFERENCE.md), [architecture](docs/ARCHITECTURE.md), [live market microstructure guide](docs/MARKET_MICROSTRUCTURE.md), [research protocol](docs/RESEARCH_PROTOCOL.md), [research foundations](docs/RESEARCH_FOUNDATIONS.md), and [risk-control principles](docs/RISK_AND_SAFETY.md).
 
