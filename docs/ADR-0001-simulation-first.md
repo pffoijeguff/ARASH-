@@ -1,19 +1,21 @@
-# ADR-0001: Simulation-Only Modes in the Foundation Release
+# ADR-0001: Staged Execution and Risk-Gated Promotion
 
 - **Status:** Accepted
 - **Date:** 2026-10-12
 
 ## Context
 
-As a research system, ARASH must demonstrate data quality, computational correctness, reporting quality, and failure handling before introducing sensitive integrations.
+ARASH is intended to evolve toward an online-capable research-to-execution platform. That ambition requires more than generating strategy signals: source integrity, market-data quality, order semantics, risk enforcement, accounting, venue reconciliation and operational recovery must fit together. Introducing unrestricted real-money execution before those contracts are dependable would couple research defects directly to external side effects.
 
 ## Decision
 
-Foundation accepts only `research` and `paper` modes. The configuration parser rejects `live`, and there is no live order-submission path.
+The foundation release supports research and paper modes. The configuration parser rejects live mode, and this branch has no production order-submission path. Online read-only market-data retrieval is allowed as an explicit capability; deterministic replay remains a research mode rather than the product's identity.
+
+Any later order-routing adapter must be introduced as a separate reviewed milestone behind explicit risk approval, bounded permissions, idempotency, reconciliation, monitoring, kill switches and a verified release process.
 
 ## Consequences
 
-- The calculation and reporting core can be tested without exchange credentials.
-- No real capital is involved in the supported execution path.
-- External integrations require a separate review after acceptance criteria are met.
-- Simulation results do not guarantee future returns or real-world execution quality.
+- Research and paper workflows can be developed without exchange trading credentials.
+- Online market data can be studied while order execution remains simulated.
+- A future production adapter must pass a separate technical and operational review.
+- Simulation and historical results do not guarantee future returns or real-world execution quality.
