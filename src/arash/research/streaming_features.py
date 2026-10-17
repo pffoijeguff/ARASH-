@@ -94,6 +94,24 @@ class StreamingMicrostructureFeatures:
         )
         return payload
 
+    def _add_trade_totals(self, trade: PublicTrade) -> None:
+        """Apply one trade to the rolling side-volume and quote-notional totals."""
+        if trade.side == "buy":
+            self._buy_volume += trade.volume
+            self._buy_notional += trade.quote_notional
+        else:
+            self._sell_volume += trade.volume
+            self._sell_notional += trade.quote_notional
+
+    def _remove_trade_totals(self, trade: PublicTrade) -> None:
+        """Remove one expired trade from totals without introducing float rounding."""
+        if trade.side == "buy":
+            self._buy_volume -= trade.volume
+            self._buy_notional -= trade.quote_notional
+        else:
+            self._sell_volume -= trade.volume
+            self._sell_notional -= trade.quote_notional
+
     def _feature_snapshot(self, event: OrderBookSnapshot | PublicTrade) -> dict[str, Any]:
         buy_volume = self._buy_volume
         sell_volume = self._sell_volume
