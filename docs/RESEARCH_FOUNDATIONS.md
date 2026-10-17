@@ -42,7 +42,16 @@ References:
 - *Liquidity commonality in cryptocurrencies*, Finance Research Letters (2025): https://doi.org/10.1016/j.frl.2025.108187
 - *Maturation of Bitcoin market microstructure: Evidence of institutional-grade liquidity and efficiency (2012–2025)*, Borsa Istanbul Review (2026): https://doi.org/10.1016/j.bir.2026.100869
 
-### 5. Risk must be enforced in the order path and operations
+### 5. Statistical evidence and economic relevance are separate gates
+
+A 2026 SSRN preprint proposes a 12-item validation checklist for machine-learning research in cryptocurrency markets. Its experiments report that statistical significance under one procedure can coexist with failure under combinatorial purged validation or after transaction costs. As an SSRN preprint, it should be treated as emerging research rather than settled consensus; its core engineering lesson is nevertheless directly relevant: forecast fit, statistical evidence, and net economic value answer different questions.
+
+**ARASH implication:** report uncertainty around return statistics, control repeated strategy selection, reserve untouched chronological evaluation, and model realistic costs as separate checks. ARASH now includes two complementary research diagnostics: a CSCV/PBO selection-instability estimate and a circular moving-block bootstrap for mean-return and Sharpe-like intervals. Neither diagnostic establishes an investable edge, and neither replaces the other.
+
+Reference:
+- Kim, *Beyond Accuracy: A Validation Framework for Machine Learning in Cryptocurrency Trading*, SSRN preprint (posted 28 Apr 2026; revised 3 Aug 2026): https://doi.org/10.2139/ssrn.6508779
+
+### 6. Risk must be enforced in the order path and operations
 
 Regulatory guidance for market access emphasizes controls intended to limit financial exposure, with documented controls and supervisory procedures. Although scope differs by venue, jurisdiction and participant type, the engineering principles are broadly relevant to robust automated systems.
 
