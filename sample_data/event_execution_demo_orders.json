@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "orders": [
+    {
+      "client_order_id": "demo-buy-a",
+      "side": "buy",
+      "quantity": "100",
+      "submitted_at": "2026-10-11T20:30:00Z",
+      "order_type": "market",
+      "time_in_force_bars": 4
+    },
+    {
+      "client_order_id": "demo-buy-b",
+      "side": "buy",
+      "quantity": "100",
+      "submitted_at": "2026-10-11T20:30:00Z",
+      "order_type": "market",
+      "time_in_force_bars": 4
+    }
+  ]
+}

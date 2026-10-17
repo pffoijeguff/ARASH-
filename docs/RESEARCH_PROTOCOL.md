@@ -1,45 +1,19 @@
-# Research Protocol and Evidence Standards
+# Research Protocol
 
-## Objective
+ARASH reports should be treated as evidence about a specified dataset and model configuration, not as predictions of future returns.
 
-ARASH should make quantitative experiments reproducible and keep the limits of their evidence explicit. This protocol is a research standard, not a claim that any strategy is profitable.
+## Minimum protocol
 
-## 1. Define the experiment
+1. Record dataset identity, source, timestamp convention, timezone, and content digest.
+2. Validate schema, ordering, duplicates, missing intervals, outliers, and session boundaries before research.
+3. Keep feature construction and parameter selection isolated from the final evaluation window.
+4. Prefer walk-forward or other chronological out-of-sample evaluation; do not randomly shuffle time series.
+5. Model fees, spread, slippage, liquidity and capacity as explicit assumptions, and perform sensitivity analysis.
+6. Compare against a declared benchmark, including simple baselines such as buy-and-hold where appropriate.
+7. Record the full tested parameter family and account for multiple comparisons when interpreting evidence.
+8. Preserve code version, settings, dataset digest, and output manifest so a run can be reproduced.
+9. State data and execution limitations alongside headline metrics.
 
-Record the dataset identity, symbol and interval, date range, configuration, benchmark, candidate family, evaluation method, and transaction-cost assumptions. Treat material changes as a new experiment rather than silently rewriting the old one.
+## Interpretation
 
-## 2. Validate the inputs
-
-Check for malformed values, duplicate or unordered timestamps, gaps, stale data, mixed instruments or intervals, and unclear provenance. Preserve warnings in reports and block runs when required assumptions are violated.
-
-## 3. Prevent temporal leakage
-
-Use chronological splits. Keep evaluation windows separate from strategy selection, tuning, and transformations that learn from data. A focused look-ahead check only supports the specific behavior it tests; it is not universal proof that all leakage is absent.
-
-## 4. Evaluate out of sample
-
-Prefer chronological walk-forward evaluation to a single favorable in-sample result. Document fold boundaries, overlap, aggregation method, and sample limitations. Inadequate evidence should remain inadequate rather than being converted into confidence.
-
-## 5. Compare fairly
-
-Use a declared benchmark where appropriate. Explain gross versus net returns, cash treatment, exposure assumptions, and evaluation periods. Comparisons are misleading when the strategy and benchmark use materially different assumptions.
-
-## 6. Model execution friction
-
-Challenge results with relevant fees, spread, slippage, liquidity, capacity, and partial-fill assumptions. Bar-based simulations cannot fully reproduce order-book state, latency, queue position, or actual venue behavior.
-
-## 7. Account for selection bias
-
-Disclose how many candidates were tested and how the candidate family was formed. Where supported and appropriate, use multiple-testing corrections or selection-bias diagnostics. Do not present the best selected result as if it had been chosen independently of all other trials.
-
-## 8. Preserve evidence and limitations
-
-Keep machine-readable reports, experiment settings, dataset identity, and relevant test evidence together. Clearly distinguish synthetic examples from market observations. A file hash can detect byte changes, but it does not prove the source or truth of the file.
-
-## Version 28.0.0 change of note
-
-The release notes describe a position-sizing correction: existing exposure in the same instrument is deducted when sizing an additional BUY, and same-instrument exposure is validated against total portfolio exposure. The archive records regression tests for these cases.
-
-## Non-negotiable rule
-
-**A backtest, a passing software test, a paper fill, or a risk diagnostic does not prove profitability and does not authorize live trading.**
+A backtest can be affected by data leakage, selection bias, sparse samples, regime shifts, unmodeled costs, and differences between simulated and real execution. Passing an internal audit is not proof of an investable edge. Statistical evidence from a limited test must be independently validated before any strong conclusion is drawn.

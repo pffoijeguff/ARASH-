@@ -1,0 +1,22 @@
+{
+  "report_type": "archived_release_gate_summary",
+  "application": "ARASH Foundation",
+  "application_version": "28.0.0",
+  "evidence_date": "2026-10-16",
+  "source_archive_sha256": "4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b",
+  "python_implementation": "CPython",
+  "python_version": "3.13.5",
+  "network_used": false,
+  "live_orders_submitted": false,
+  "checks_passed": 24,
+  "checks_failed": 0,
+  "checks_incomplete": 1,
+  "status": "INCOMPLETE",
+  "incomplete_reason": "Ruff was unavailable in the archived environment.",
+  "pytest_passed": 301,
+  "smoke_checks_passed": 11,
+  "smoke_checks_total": 11,
+  "other_archived_checks": ["compileall passed", "wheel integrity passed", "isolated install/import passed"],
+  "limitations": ["This is an archived report summary, not a fresh CI run.", "Python 3.12 and hosted GitHub Actions require fresh verification."],
+  "details": "The original detailed JSON release-gate output is retained in the downloadable cleaned source archive."
+}

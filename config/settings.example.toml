@@ -1,0 +1,14 @@
+[app]
+name = "ARASH"
+version = "28.0.0"
+
+[runtime]
+# Foundation supports research and paper modes only.
+mode = "paper"
+timezone = "Asia/Tehran"
+
+[storage]
+database_path = "data/arash.sqlite3"
+
+[reporting]
+currency_label = "SIMULATED_UNITS"

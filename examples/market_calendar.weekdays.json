@@ -1,0 +1,12 @@
+{
+  "name": "Example Weekday Session (not exchange-verified)",
+  "timezone": "Asia/Tehran",
+  "weekly_sessions": {
+    "0": [["09:00", "17:00"]],
+    "1": [["09:00", "17:00"]],
+    "2": [["09:00", "17:00"]],
+    "3": [["09:00", "17:00"]],
+    "4": [["09:00", "17:00"]]
+  },
+  "holidays": []
+}

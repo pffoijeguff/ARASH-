@@ -1,29 +1,22 @@
 # Security Policy
 
-## Scope
+## Scope and operating boundary
 
-ARASH is documented as an offline research and paper-simulation project. The public source tree is still being prepared, so this policy does not imply that a live-execution service is available.
-
-Security-sensitive areas include research-data handling, local database integrity, generated artifacts, report verification, dependency and build integrity, accidental credential publication, and any future change that expands network or execution capabilities.
+ARASH Foundation 28.0.0 is an offline-first research and paper-simulation project. Live order submission is out of scope. Optional market-data connectors are read-only and should be invoked only when explicitly required.
 
 ## Reporting a vulnerability
 
-Please do not publish passwords, API keys, tokens, personal account information, private datasets, or exploit details in a public issue.
+Do not publish credentials, private account data, or exploit details in a public issue. Contact the repository owner through a private channel available on the repository profile. Include the affected version, a concise impact statement, and a reproducible description that contains no personal or secret data.
 
-If GitHub's private vulnerability reporting is enabled for this repository, use that channel. Otherwise, contact the repository owner through the GitHub profile and share only the minimum details necessary to establish a secure reporting channel. Do not include secret values in the initial message.
+## Maintainer and contributor rules
 
-Include, where safe:
+- Never commit API keys, exchange credentials, tokens, private keys, wallet secrets, `.env` files, local databases, or private datasets.
+- Treat every external payload and imported file as untrusted input.
+- New network adapters require explicit review of authentication, rate limits, timeouts, retries, logging, and failure behavior.
+- Do not introduce live order-submission code or a mode that enables it.
+- Do not log credential headers or sensitive request metadata.
+- Back up local databases before changing software versions; migrations are not a substitute for an operator-managed backup.
+- Content hashes and report manifests support integrity checks but do not authenticate a data provider or prove market-data correctness.
+- Simulated fills, stop prices, slippage, and modeled costs are not real execution guarantees.
 
-- the affected revision or artifact;
-- the component and preconditions involved;
-- a concise impact assessment;
-- minimal reproduction steps that do not expose secrets or other people's data;
-- any suggested mitigation.
-
-## Security expectations
-
-- Never commit real credentials or local trading-account data.
-- Keep test fixtures synthetic unless use of a real dataset is explicitly authorized and reviewed.
-- Treat SHA-256 fingerprints as integrity checks, not proof of source authenticity.
-- Keep incomplete release checks visible rather than bypassing or deleting them.
-- Any future live-execution design requires a separate security review and must not be enabled implicitly by research features.
+If a secret is accidentally committed, revoke or rotate it immediately; deleting the file in a later commit does not remove it from Git history.

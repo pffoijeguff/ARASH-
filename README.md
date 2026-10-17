@@ -1,94 +1,81 @@
-<div align="center">
-
 # ARASH Foundation
 
-**Systematic trading research · Offline-first simulation · Explicit risk controls**
+**An offline-first quantitative research and paper-trading framework.**
 
-[![Research mode](https://img.shields.io/badge/mode-offline%20research-2457A7?style=for-the-badge)](docs/RISK_AND_SAFETY.md)
-[![Execution boundary](https://img.shields.io/badge/live%20orders-not%20supported-6B7280?style=for-the-badge)](docs/RISK_AND_SAFETY.md)
-[![Reference version](https://img.shields.io/badge/reference-v28.0.0-5B4BDB?style=for-the-badge)](docs/RELEASE_STATUS.md)
+ARASH Foundation provides a reproducible environment for historical market-data research, backtesting, risk diagnostics, simulated execution, portfolio analysis, and auditable local research records. The project is designed to make assumptions and limitations explicit rather than treating a backtest as evidence of future performance.
 
-*An auditable foundation for market-data validation, quantitative experiments, paper execution, portfolio-risk diagnostics, and reproducible research evidence.*
+> **Research-only boundary:** ARASH Foundation 28.0.0 is intended for offline research and paper simulation. It does not support live order submission. It is not financial advice and does not establish a profitable trading strategy.
 
-</div>
+## Project scope
 
----
+- **Market-data validation:** CSV parsing, data-quality checks, session-aware validation, reconciliation, and content-addressed snapshots.
+- **Quantitative research:** Backtests, walk-forward evaluation, cost sensitivity, prefix-invariance checks, strategy comparisons, and selection-bias diagnostics.
+- **Risk controls:** Explicit risk inputs, portfolio-exposure checks, drawdown diagnostics, stress testing, and paper-broker safeguards.
+- **Simulated execution:** Paper-order workflows and modeled execution constraints; fills are simulated, not exchange-confirmed.
+- **Auditability:** Local SQLite records, reproducible manifests, release-gate checks, and test evidence.
+- **Optional read-only data access:** Public market-data connectors are opt-in. Research can also run against local sample data without network access.
 
-> **Repository status:** The public repository is being prepared using the supplied **ARASH Foundation 28.0.0** archive as the reference snapshot. The source archive has been reviewed for obvious credential patterns and sensitive filenames, but its source tree has **not yet been synchronized into this GitHub repository**. Therefore, this repository is currently documentation-only and is not yet installable or runnable from GitHub.
+## Quick start
 
-## What is ARASH?
+**Requirements:** Python 3.12 or newer.
 
-ARASH is an offline-first software foundation for systematic trading research. Its goal is to make experiments inspectable and repeatable while keeping data quality, transaction costs, risk assumptions, and missing evidence visible.
-
-The project does not promise returns. It aims to help developers evaluate trading hypotheses without confusing a backtest, a paper fill, or a passing software test with proof of a profitable strategy.
-
-## Capabilities in the 28.0.0 reference archive
-
-- **Market-data ingestion and quality:** local candle-file loading, structural checks, data-health diagnostics, and market-data workflows.
-- **Historical research:** offline backtesting, walk-forward evaluation, strategy comparison, robustness analysis, and quantitative audits where supported.
-- **Paper execution:** local simulated order handling, execution-friction assumptions, order lifecycle tests, and simulated portfolio state.
-- **Risk engine:** position sizing, portfolio exposure controls, valuation-mark freshness checks, portfolio stress diagnostics, and risk-related CLI workflows.
-- **Research persistence and reporting:** SQLite-backed local storage, machine-readable outputs, and reproducible diagnostic records.
-- **Safety boundaries:** the reference snapshot is designed for research and paper simulation; its release evidence records that no live orders were submitted.
-
-These are capabilities documented by the 28.0.0 source archive. They have **not yet been verified by running code from this GitHub checkout**, because the source files are not present here yet.
-
-## Research workflow
-
-```mermaid
-flowchart TD
-    A[Local market data] --> B[Validate and audit inputs]
-    B --> C[Backtest and walk-forward research]
-    C --> D[Robustness and execution-cost analysis]
-    D --> E[Paper execution and risk checks]
-    E --> F[Reports and local research ledger]
-    F --> G[Human review of assumptions and limitations]
+```bash
+python -m venv .venv
+# Linux / macOS
+source .venv/bin/activate
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+python -m arash --help
 ```
 
-## Risk and research integrity
+Run the automated tests:
 
-1. Keep evaluation data chronologically separate from strategy selection and tuning.
-2. Declare the dataset, configuration, benchmark, and transaction-cost assumptions.
-3. Treat simulated orders and fills as simulated—not as exchange activity.
-4. Keep missing or unavailable checks marked as incomplete.
-5. Do not infer profitability from backtests, test counts, or software quality gates.
-6. Never commit API credentials, personal account data, local ledgers, or private datasets.
+```bash
+python -m pytest -q
+```
 
-Read the [Architecture](docs/ARCHITECTURE.md), [Research Protocol](docs/RESEARCH_PROTOCOL.md), and [Risk and Safety Policy](docs/RISK_AND_SAFETY.md).
+Run the local release gate (writes a generated JSON report):
 
-## Verification reported for version 28.0.0
+```bash
+python scripts/release_gate.py --output artifacts/release-gate-local.json
+```
 
-The archive's recorded release gate reports:
+Generated databases, credentials, local environment files, build outputs, and release-gate results are excluded from version control by default. A placeholder `.env.example` is included; it contains no credentials.
 
-| Check | Recorded result |
-|---|---|
-| Automated tests | 301 passed across 10 pytest groups |
-| Smoke checks | 11/11 passed |
-| Python compilation | Passed |
-| Wheel build and isolated install/import | Passed |
-| Ruff lint | Unavailable; not counted as a pass |
-| Python 3.12 and hosted CI | Not independently verified |
-| Overall release gate | **INCOMPLETE** — 24 passed, 0 failed, 1 incomplete |
+## Repository map
 
-These are archive-reported results dated 2026-10-16, not CI results for this GitHub repository. The full details and limitations are in [Release and Verification Status](docs/RELEASE_STATUS.md).
+```text
+src/arash/                 Application package
+  data/                    Loaders, quality checks, snapshots, and sync helpers
+  research/                Backtesting, evaluation, robustness, and quant audits
+  risk/                    Risk assessment and stress diagnostics
+  paper/                   Simulated broker and execution models
+  storage/                 Local SQLite schema and persistence
+  integrations/            Optional read-only public market-data adapters
+tests/                     Automated test suite
+scripts/release_gate.py    Reproducible local release checks
+sample_data/               Synthetic demonstration data
+config/                    Example-only configuration
+docs/                      Architecture, research protocol, and safety notes
+artifacts/                 Sanitized release-gate evidence for 28.0.0
+```
+
+## Quality evidence and limitations
+
+The included release-gate artifact records an archived run from **2026-10-16** using CPython 3.13.5: 24 checks passed, 0 failed, and 1 remained incomplete because Ruff was unavailable in that environment. The archive records 301 passing tests and 11/11 smoke checks. These are **archived results**, not a claim that the suite was rerun against every current development environment. Python 3.12 and hosted GitHub Actions must be verified by CI before the release can be considered fully verified. See [release status](docs/RELEASE_STATUS.md).
 
 ## Documentation
 
-- [Architecture and component boundaries](docs/ARCHITECTURE.md)
-- [Research and validation protocol](docs/RESEARCH_PROTOCOL.md)
-- [Risk controls and safety boundary](docs/RISK_AND_SAFETY.md)
-- [Release and verification status](docs/RELEASE_STATUS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Research protocol](docs/RESEARCH_PROTOCOL.md)
+- [Risk and safety boundaries](docs/RISK_AND_SAFETY.md)
+- [Release status](docs/RELEASE_STATUS.md)
 - [Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Security reporting](SECURITY.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
 
-## Source publication status
+## License
 
-The next repository milestone is to synchronize the reviewed source, tests, packaging metadata, configuration examples, sample data, and CI workflow from the 28.0.0 archive. After synchronization, the complete release gate must be rerun from a clean checkout before installation or release readiness is claimed.
-
-## Disclaimer
-
-ARASH is a software and quantitative-research project, not financial advice. Backtests and paper simulations are sensitive to input quality, assumptions, model selection, and execution costs. They do not guarantee future results.
-
-**Current boundary: offline research and paper simulation only. No live-order execution is claimed or authorized by this repository.**
+No explicit open-source license has been supplied with this archive. The repository owner should choose and add a license before granting permission for external reuse or redistribution.
