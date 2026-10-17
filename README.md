@@ -54,7 +54,7 @@ For a live read-only public order-book stream (requires the optional WebSocket d
     python -m pip install ".[marketstream]"
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
-The streaming command seeds the initial book from Nobitex's public REST snapshot and then consumes its public WebSocket channel. It reports market observations only and does not submit orders.
+The streaming command subscribes to Nobitex's public WebSocket channel and bootstraps the initial book from the public REST snapshot. It reports market observations only and does not submit orders.
 
 Browse the [CLI reference](docs/CLI_REFERENCE.md), [architecture](docs/ARCHITECTURE.md), [research protocol](docs/RESEARCH_PROTOCOL.md), [research foundations](docs/RESEARCH_FOUNDATIONS.md), and [risk-control principles](docs/RISK_AND_SAFETY.md).
 
