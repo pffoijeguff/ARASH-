@@ -1,0 +1,284 @@
+name: Restore ARASH 28.0.0 reference source
+
+on:
+  push:
+    branches: [source-sync-28.0.0]
+    paths:
+      - ".recovery/**"
+
+permissions:
+  contents: write
+
+jobs:
+  restore-reference:
+    if: ${{ !contains(github.event.head_commit.message, '[reference source restored]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: source-sync-28.0.0
+          fetch-depth: 0
+      - id: source
+        name: Detect staged reference archive
+        run: |
+          if compgen -G ".recovery/arash-28-en-clean.zip.b64.part*" > /dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up Python
+        if: steps.source.outputs.present == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Restore reference implementation and merge diagnostic extensions
+        if: steps.source.outputs.present == 'true'
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import base64
+          import hashlib
+          import io
+          import shutil
+          import tempfile
+          import zipfile
+          from pathlib import Path
+
+          repo = Path.cwd()
+          parts = sorted((repo / ".recovery").glob("arash-28-en-clean.zip.b64.part*"))
+          if not parts:
+              raise SystemExit("Reference archive parts are missing.")
+          encoded = "".join("".join(p.read_text(encoding="ascii").split()) for p in parts)
+          archive_bytes = base64.b64decode(encoded, validate=True)
+          expected_sha256 = "23daa1c6d03f99431aed468c36229b1bd2e073525b3792a892ef82436ae21a73"
+          observed_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+          if observed_sha256 != expected_sha256:
+              raise SystemExit(f"Reference archive SHA-256 mismatch: {observed_sha256}")
+          with tempfile.TemporaryDirectory(prefix="arash-source-restore-") as temp_name:
+              temp = Path(temp_name)
+              extracted = temp / "archive"
+              extracted.mkdir()
+              with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
+                  for info in bundle.infolist():
+                      destination = (extracted / info.filename).resolve()
+                      if extracted.resolve() not in destination.parents and destination != extracted.resolve():
+                          raise SystemExit(f"Unsafe archive path: {info.filename}")
+                  bundle.extractall(extracted)
+              reference = extracted / "ARASH_Foundation_28.0.0"
+              addon_root = temp / "addons"
+              addon_root.mkdir()
+              addon_files = [
+                  "src/arash/data/streaming.py",
+                  "src/arash/research/pbo.py",
+                  "src/arash/research/return_statistics.py",
+                  "src/arash/research/streaming_features.py",
+                  "tests/test_public_market_stream.py",
+                  "tests/test_research_diagnostics.py",
+              ]
+              for rel in addon_files:
+                  src = repo / rel
+                  if not src.is_file():
+                      raise SystemExit(f"Expected extension missing before restore: {rel}")
+                  target = addon_root / rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, target)
+
+              shutil.rmtree(repo / "src/arash", ignore_errors=True)
+              shutil.copytree(reference / "src/arash", repo / "src/arash")
+              shutil.rmtree(repo / "tests", ignore_errors=True)
+              shutil.copytree(reference / "tests", repo / "tests")
+              shutil.copy2(reference / "scripts/release_gate.py", repo / "scripts/release_gate.py")
+              for rel in addon_files:
+                  src = addon_root / rel
+                  target = repo / rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, target)
+              for original in (reference / "sample_data").iterdir():
+                  if original.is_file():
+                      target = repo / "sample_data" / original.name
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copy2(original, target)
+
+              cli_path = repo / "src/arash/cli.py"
+              cli = cli_path.read_text(encoding="utf-8")
+              import_anchor = "from arash import __version__\n"
+              import_additions = (
+                  "import asyncio\n"
+                  "from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data\n"
+                  "from arash.research.streaming_features import StreamingMicrostructureFeatures\n"
+                  "from arash.research.pbo import estimate_probability_of_backtest_overfitting\n"
+                  "from arash.research.return_statistics import bootstrap_return_statistics\n"
+              )
+              if "stream_public_market_data" not in cli:
+                  if import_anchor not in cli:
+                      raise SystemExit("Could not locate CLI import insertion point.")
+                  cli = cli.replace(import_anchor, import_anchor + import_additions, 1)
+
+              parser_anchor = "    args = parser.parse_args(argv)\n"
+              parser_additions = '''    pbo_parser = subparsers.add_parser("pbo-audit", help="Estimate backtest-selection instability with CSCV/PBO")
+              pbo_parser.add_argument("path", help="JSON file containing candidate_returns")
+              pbo_parser.add_argument("--blocks", type=int, default=8)
+              pbo_parser.add_argument("--output")
+
+              stats_parser = subparsers.add_parser("return-stats", help="Estimate block-bootstrap return-statistic uncertainty")
+              stats_parser.add_argument("path", help="JSON file containing returns")
+              stats_parser.add_argument("--iterations", type=int, default=2000)
+              stats_parser.add_argument("--block-length", type=int, default=5)
+              stats_parser.add_argument("--confidence-level", type=float, default=0.95)
+              stats_parser.add_argument("--seed", type=int, default=0)
+              stats_parser.add_argument("--periods-per-year", type=int)
+              stats_parser.add_argument("--output")
+
+              stream_parser = subparsers.add_parser("market-stream", help="Stream public order-book and trade data with rolling microstructure features")
+              stream_parser.add_argument("--symbol", required=True, help="Market symbol, for example BTCIRT")
+              stream_parser.add_argument("--max-events", type=int, default=0, help="Stop after this many market events; 0 streams until interrupted")
+              stream_parser.add_argument("--max-reconnects", type=int, default=5)
+              stream_parser.add_argument("--depth-levels", type=int, default=10)
+              stream_parser.add_argument("--flow-window-seconds", type=int, default=60)
+
+'''
+              if "pbo-audit" not in cli:
+                  if cli.count(parser_anchor) != 1:
+                      raise SystemExit("Could not locate unique CLI parser insertion point.")
+                  cli = cli.replace(parser_anchor, parser_additions + parser_anchor, 1)
+
+              handler_anchor = "    try:\n        store = _store_from_args(args)\n"
+              handler_additions = '''    try:
+        if args.command == "pbo-audit":
+            input_path = Path(args.path)
+            if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
+                raise ValueError("PBO input must be an existing JSON file no larger than 5 MB")
+            raw_input = input_path.read_bytes()
+            payload = json.loads(raw_input)
+            if not isinstance(payload, dict) or not isinstance(payload.get("candidate_returns"), dict):
+                raise ValueError("PBO input must be a JSON object with a candidate_returns object")
+            report = estimate_probability_of_backtest_overfitting(payload["candidate_returns"], blocks=args.blocks)
+            report["input_path"] = str(input_path)
+            report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
+            rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + chr(10)
+            if args.output:
+                output = Path(args.output)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(rendered, encoding="utf-8")
+            print(rendered, end="")
+            return 0
+
+        if args.command == "return-stats":
+            input_path = Path(args.path)
+            if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
+                raise ValueError("return-statistics input must be an existing JSON file no larger than 5 MB")
+            raw_input = input_path.read_bytes()
+            payload = json.loads(raw_input)
+            if not isinstance(payload, dict) or not isinstance(payload.get("returns"), list):
+                raise ValueError("return-statistics input must be a JSON object with a returns array")
+            report = bootstrap_return_statistics(
+                payload["returns"], iterations=args.iterations, block_length=args.block_length,
+                confidence_level=args.confidence_level, seed=args.seed,
+                periods_per_year=args.periods_per_year,
+            )
+            report["input_path"] = str(input_path)
+            report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
+            rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + chr(10)
+            if args.output:
+                output = Path(args.output)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(rendered, encoding="utf-8")
+            print(rendered, end="")
+            return 0
+
+        if args.command == "market-stream":
+            if args.max_events < 0:
+                raise ValueError("--max-events must be zero or a positive integer")
+            if not 1 <= args.depth_levels <= 500:
+                raise ValueError("--depth-levels must be between 1 and 500")
+            if not 5 <= args.flow_window_seconds <= 3600:
+                raise ValueError("--flow-window-seconds must be between 5 and 3600")
+            feature_engine = StreamingMicrostructureFeatures(
+                window_seconds=args.flow_window_seconds, depth_limit=args.depth_levels
+            )
+            stop_event = asyncio.Event()
+            event_count = 0
+
+            async def emit_event(event: OrderBookSnapshot | PublicTrade) -> None:
+                nonlocal event_count
+                payload = feature_engine.observe(event)
+                print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str), flush=True)
+                event_count += 1
+                if args.max_events and event_count >= args.max_events:
+                    stop_event.set()
+
+            asyncio.run(stream_public_market_data(
+                args.symbol, emit_event, on_trade=emit_event, stop_event=stop_event,
+                max_reconnects=args.max_reconnects,
+            ))
+            return 0
+
+        store = _store_from_args(args)
+'''
+              if 'if args.command == "return-stats":' not in cli:
+                  if handler_anchor not in cli:
+                      raise SystemExit("Could not locate unique CLI handler insertion point.")
+                  cli = cli.replace(handler_anchor, handler_additions, 1)
+              cli_path.write_text(cli, encoding="utf-8")
+
+              manifest_path = repo / "docs/SOURCE_SYNC_MANIFEST.md"
+              if manifest_path.is_file():
+                  manifest = manifest_path.read_text(encoding="utf-8")
+                  marker = "## Parity audit and merge blocker"
+                  if marker in manifest:
+                      manifest = manifest[:manifest.index(marker)] + '''## Reference-source reconciliation
+
+The authoritative 28.0.0 English-clean archive was restored using its verified ZIP SHA-256. The baseline package, original reference test suite, and release-gate script were copied directly from that archive. Focused PBO, circular-block-bootstrap, and public-stream modules/tests were retained as additive extensions. CLI commands for pbo-audit, return-stats, and market-stream were layered onto the restored reference CLI.
+
+The restore workflow validates the source checksum, rejects unsafe ZIP paths, and runs compile, lint, the complete checked-in pytest suite, CLI checks, and synthetic diagnostic integration checks before committing the synchronized source.
+
+''' + manifest[manifest.index("## Operating boundaries"):]
+                  manifest_path.write_text(manifest, encoding="utf-8")
+          print("Reference-source restore prepared; exact archive SHA verified.")
+          PY
+      - name: Install project and development dependencies
+        if: steps.source.outputs.present == 'true'
+        run: python -m pip install -e ".[dev,marketstream]"
+      - name: Compile source and tests
+        if: steps.source.outputs.present == 'true'
+        run: python -m compileall -q src tests scripts
+      - name: Run source and extension lint checks
+        if: steps.source.outputs.present == 'true'
+        run: |
+          python -m ruff check --select E4,E7,E9,F src/arash/data/streaming.py src/arash/research/streaming_features.py src/arash/research/pbo.py src/arash/research/return_statistics.py tests
+      - name: Run complete pytest suite
+        if: steps.source.outputs.present == 'true'
+        run: python -m pytest -q tests
+      - name: Verify CLI and diagnostic integration
+        if: steps.source.outputs.present == 'true'
+        run: |
+          python -m arash --help
+          python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output "$RUNNER_TEMP/arash-pbo.json"
+          python -m arash return-stats sample_data/return_stats_demo.json --iterations 250 --block-length 5 --seed 17 --output "$RUNNER_TEMP/arash-return-stats.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          pbo = json.loads((root / "arash-pbo.json").read_text(encoding="utf-8"))
+          stats = json.loads((root / "arash-return-stats.json").read_text(encoding="utf-8"))
+          assert pbo["status"] == "COMPLETED_DIAGNOSTIC"
+          assert pbo["trade_action"] == "NONE" and pbo["execution_enabled"] is False
+          assert stats["status"] == "COMPLETED_DIAGNOSTIC"
+          assert stats["trade_action"] == "NONE" and stats["execution_enabled"] is False
+          assert len(stats["input_sha256"]) == 64
+          print("Diagnostic integration checks passed; no trading action is generated.")
+          PY
+      - name: Commit synchronized source only after checks pass
+        if: steps.source.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/arash tests scripts/release_gate.py sample_data docs/SOURCE_SYNC_MANIFEST.md
+          git rm -f .recovery/arash-28-en-clean.zip.b64.part*
+          git commit -m "fix: restore 28.0.0 reference source [reference source restored]"
+          git push origin HEAD:source-sync-28.0.0
