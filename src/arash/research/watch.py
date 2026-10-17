@@ -13,19 +13,38 @@ _BAD_STATUSES = {"BLOCKED", "NO_DATA", "DEGRADED", "INSUFFICIENT_HISTORY"}
 
 
 def state_from_market_report(market_row: dict[str, Any]) -> dict[str, Any]:
-    market = market_row.get("market") or {}
-    intelligence = market_row.get("intelligence") or {}
-    quality = market_row.get("data_quality") or intelligence.get("data_quality") or {}
-    price = intelligence.get("price") or {}
-    returns = price.get("returns_pct") or {}
-    regime_data = intelligence.get("market_regime") or {}
+    """Extract comparable state from either a wrapped or direct intelligence report."""
+    wrapped_intelligence = market_row.get("intelligence")
+    intelligence = wrapped_intelligence if isinstance(wrapped_intelligence, dict) else market_row
+    market = market_row.get("market") if isinstance(market_row.get("market"), dict) else {}
+    quality_value = market_row.get("data_quality") or intelligence.get("data_quality") or {}
+    quality = quality_value if isinstance(quality_value, dict) else {}
+    price_value = intelligence.get("price") or market_row.get("price") or {}
+    price = price_value if isinstance(price_value, dict) else {}
+    returns_value = price.get("returns_pct") or {}
+    returns = returns_value if isinstance(returns_value, dict) else {}
+    regime_value = intelligence.get("market_regime") or market_row.get("market_regime") or {}
+    regime_data = regime_value if isinstance(regime_value, dict) else {}
+    dataset_value = market_row.get("dataset") or intelligence.get("dataset") or {}
+    dataset = dataset_value if isinstance(dataset_value, dict) else {}
+    candle_count_raw = market_row.get("candle_count", dataset.get("candle_count", 0))
+    try:
+        candle_count = int(candle_count_raw or 0)
+    except (TypeError, ValueError):
+        candle_count = 0
     return {
-        "symbol": str(market.get("symbol", "UNKNOWN")),
-        "interval": str(market.get("interval", "UNKNOWN")),
+        "symbol": str(market.get("symbol", market_row.get("symbol", "UNKNOWN"))),
+        "interval": str(market.get("interval", market_row.get("interval", "UNKNOWN"))),
         "status": str(market_row.get("status", "BLOCKED")),
-        "dataset_sha256": str(market_row.get("dataset_sha256") or ""),
-        "candle_count": int(market_row.get("candle_count") or 0),
-        "latest_timestamp": quality.get("last_timestamp") or (intelligence.get("dataset") or {}).get("last_timestamp_utc"),
+        "dataset_sha256": str(
+            market_row.get("dataset_sha256") or dataset.get("sha256") or ""
+        ),
+        "candle_count": candle_count,
+        "latest_timestamp": (
+            quality.get("last_timestamp")
+            or dataset.get("last_timestamp_utc")
+            or dataset.get("last_timestamp")
+        ),
         "last_close": price.get("last_close"),
         "one_bar_return_pct": returns.get("1_bar_pct"),
         "regime": regime_data.get("latest_causally_assigned_regime"),
@@ -35,7 +54,6 @@ def state_from_market_report(market_row: dict[str, Any]) -> dict[str, Any]:
         "error_count": len(quality.get("errors") or []),
         "warning_count": len(market_row.get("warnings") or quality.get("warnings") or []),
     }
-
 
 def evaluate_state_change(
     current: dict[str, Any],
