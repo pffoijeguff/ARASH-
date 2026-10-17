@@ -63,6 +63,8 @@ A resilient runtime should also include bounded queues, idempotent command ident
 - src/arash/cli.py: CLI and command orchestration.
 - src/arash/data: market-data validation, snapshots, reconciliation and streaming.py for public WebSocket order-book and trade events.
 - src/arash/research/streaming_features.py: bounded rolling trade-flow and book-context metrics, with no trade-action generation.
+- src/arash/research/return_statistics.py: circular moving-block bootstrap uncertainty intervals for return series.
+- src/arash/research/pbo.py: CSCV-based probability-of-backtest-overfitting diagnostic.
 - src/arash/integrations: public read-only market-data adapters.
 - src/arash/research: backtests, chronological evaluation, robustness and research diagnostics.
 - src/arash/risk: explicit risk inputs, sizing and exposure checks.
