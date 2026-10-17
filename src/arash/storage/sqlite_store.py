@@ -231,7 +231,7 @@ class SQLiteStore:
             if old and not success_at:
                 success_at = old.get("last_success_at")
             conn.execute(
-                "INSERT INTO market_data_fetches VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO market_data_fetches VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (fetch_id, batch_id, source, symbol, interval, fetched_at.isoformat(), from_iso, to_iso,
                  received_count, inserted_count, updated_count, unchanged_count, digest, status, detail[:1000]),
             )

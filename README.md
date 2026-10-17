@@ -2,35 +2,35 @@
 
 **An offline-first quantitative research and paper-simulation framework.**
 
-ARASH Foundation is being synchronized into this repository from the 28.0.0 reference archive. This branch contains the public documentation and a staged source foundation. It is a work branch, not a verified release.
+The public source-synchronization branch now contains a staged CLI, local SQLite storage, a persistent paper broker, selected market-data ingestion and quality tools, risk diagnostics, and offline candle-based execution simulation. The full 28.0.0 research suite has not yet been synchronized, so this is a working branch rather than a verified release.
 
 > **Research-only boundary:** This project is intended for offline analysis and paper simulation. It does not support live order submission. It is not financial advice and does not establish a profitable trading strategy.
 
-## Commands in the staged source branch
+## Install and open the CLI
 
     python -m venv .venv
     source .venv/bin/activate
-    python -m pip install -e ".[dev]"
+    python -m pip install .
     python -m arash --help
 
-The currently staged CLI focuses on:
-- **csv-health:** audit local OHLCV CSV data and identify structural issues, timestamp problems, gaps and stale observations.
-- **csv-validate:** load strict OHLCV CSV rows before downstream research.
-- **market-fetch:** optional, bounded, read-only public candle retrieval.
-- **risk-check:** calculate hypothetical long-only sizing under explicit stop, exposure and loss assumptions.
-- **execution-simulate:** generate an offline candle-based simulated execution report.
-- **execution-stress:** compare explicit modeled execution-cost and participation scenarios.
+Use the equivalent virtual-environment activation command on Windows PowerShell.
+
+## Current staged command set
+
+- **csv-health:** audit OHLCV CSV data for structural issues, timestamp problems, gaps and stale observations.
+- **csv-validate:** strictly load local OHLCV data before downstream research.
+- **market-fetch:** bounded, read-only public candle retrieval; does not access account credentials.
+- **risk-check:** compute hypothetical long-only position sizing under explicit risk assumptions.
+- **execution-simulate:** generate a bounded candle-based simulated execution report.
+- **execution-stress:** compare explicit execution cost and capacity assumptions.
 
 Examples:
 
     python -m arash csv-health sample_data/example_candles.csv
     python -m arash csv-validate sample_data/example_candles.csv
+    python -m arash risk-check --equity 10000 --cash 10000 --entry-price 100 --stop-price 95
 
-These commands do not submit trades. Market fetch is read-only; analysis and execution reports are conditional on their declared input data and assumptions.
-
-## Current branch state
-
-This branch is a source-synchronization work in progress. The archive's full persistent broker, SQLite market-data store, and complete research command suite are not yet all present in this Git branch, so this branch must not be treated as a complete replacement for the downloaded source package. No test suite or release gate is being used as a blocker for source transfer; fresh verification remains a later release step.
+Paper-account methods are available in the source API and command handler module. The source branch is still being reconciled with the full reference package, so use the release status page to distinguish the staged subset from the complete archive functionality.
 
 ## Repository map
 
@@ -38,23 +38,30 @@ This branch is a source-synchronization work in progress. The archive's full per
     src/arash/data/                        CSV validation, health, snapshots and connectors
     src/arash/domain/                      Decimal-based domain models
     src/arash/integrations/nobitex/        Optional read-only public market-data client
+    src/arash/paper/broker.py              Persistent offline spot-paper broker
     src/arash/paper/execution.py           Offline candle-based execution simulation
     src/arash/paper/execution_stress.py    Execution sensitivity scenarios
-    src/arash/risk/                        Sizing, persisted-snapshot audit and stress analysis
+    src/arash/risk/                        Sizing, snapshot audit and stress analysis
+    src/arash/storage/sqlite_store.py      Local market-data and research-record store
     src/arash/safety/                      Research/paper operating-mode guard
     docs/                                  Architecture, risk and research documentation
-    sample_data/                           Synthetic or demonstration inputs
+    sample_data/                           Demonstration inputs
 
-## Risk and reproducibility
+## Safety and reproducibility
 
-- Keep dataset identity, timestamp semantics, assumptions, fees and simulated costs explicit.
-- Do not treat backtests, stress scenarios or risk estimates as guarantees.
-- Data hashes establish byte-level identity, not source authenticity.
-- Paper fills and simulated stops are not real execution outcomes.
-- Do not commit API credentials, private account data, local ledgers or unreviewed datasets.
+- Paper positions use caller-supplied reference prices; no market price is silently fetched for a paper order.
+- BUY orders require an explicit risk policy and risk inputs; short selling and leverage are disabled.
+- Public market-data access is read-only and bounded.
+- Paper-account valuations use one currency; FX conversion is disabled.
+- A report is conditional on its dataset, timestamps and assumptions. It does not guarantee real fills, capital preservation or profitability.
+- Never commit credentials, private account data or unreviewed datasets.
 
-See Architecture, Research Protocol, Risk and Safety, and Release Status in the docs folder.
+## Synchronization and verification status
+
+This branch is intentionally a partial source sync. The remaining research modules and full file parity with the cleaned 28.0.0 archive are outstanding. Unit tests were deliberately not run during this source-transfer pass. The GitHub workflow performs only package installation, compilation and CLI help verification; it does not claim a passing test suite.
+
+See [Architecture](docs/ARCHITECTURE.md), [Research Protocol](docs/RESEARCH_PROTOCOL.md), [Risk and Safety](docs/RISK_AND_SAFETY.md), and [Release Status](docs/RELEASE_STATUS.md).
 
 ## License
 
-The project owner has not yet supplied an explicit license for external reuse or redistribution.
+An explicit license for reuse or redistribution has not yet been selected by the project owner.
