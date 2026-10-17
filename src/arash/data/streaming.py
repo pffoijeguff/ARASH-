@@ -116,7 +116,29 @@ class OrderBookSnapshot:
     def spread_bps(self) -> Decimal:
         return self.spread / self.midpoint * Decimal("10000")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, depth_limit: int = 10) -> dict[str, Any]:
+        """Serialize top-of-book metrics and a bounded depth view for downstream analysis."""
+        if type(depth_limit) is not int or not 1 <= depth_limit <= MAX_BOOK_LEVELS:
+            raise ValueError(f"depth_limit must be an integer between 1 and {MAX_BOOK_LEVELS}")
+        bids = self.bids[:depth_limit]
+        asks = self.asks[:depth_limit]
+        bid_quantity = sum((level.quantity for level in bids), ZERO)
+        ask_quantity = sum((level.quantity for level in asks), ZERO)
+        total_quantity = bid_quantity + ask_quantity
+        depth_imbalance = (
+            (bid_quantity - ask_quantity) / total_quantity
+            if total_quantity > ZERO
+            else ZERO
+        )
+        best_bid_quantity = self.bids[0].quantity
+        best_ask_quantity = self.asks[0].quantity
+        microprice_denominator = best_bid_quantity + best_ask_quantity
+        microprice = (
+            (self.best_ask * best_bid_quantity + self.best_bid * best_ask_quantity)
+            / microprice_denominator
+            if microprice_denominator > ZERO
+            else self.midpoint
+        )
         return {
             "schema_version": 1,
             "event_type": "public_orderbook_snapshot",
@@ -124,23 +146,28 @@ class OrderBookSnapshot:
             "symbol": self.symbol,
             "exchange_timestamp": self.exchange_timestamp.isoformat(),
             "received_at": self.received_at.isoformat(),
-            "feed_lag_ms": max(
-                0,
-                int((self.received_at - self.exchange_timestamp).total_seconds() * 1000),
-            ),
+            "feed_lag_ms": int((self.received_at - self.exchange_timestamp).total_seconds() * 1000),
             "update_offset": self.update_offset,
             "best_bid": str(self.best_bid),
+            "best_bid_quantity": str(best_bid_quantity),
             "best_ask": str(self.best_ask),
+            "best_ask_quantity": str(best_ask_quantity),
             "midpoint": str(self.midpoint),
+            "microprice": str(microprice),
             "spread": str(self.spread),
             "spread_bps": str(self.spread_bps),
             "last_trade_price": (
                 str(self.last_trade_price) if self.last_trade_price is not None else None
             ),
-            "bid_depth_levels": len(self.bids),
-            "ask_depth_levels": len(self.asks),
-            "bids": [[str(level.price), str(level.quantity)] for level in self.bids],
-            "asks": [[str(level.price), str(level.quantity)] for level in self.asks],
+            "bid_depth_levels_available": len(self.bids),
+            "ask_depth_levels_available": len(self.asks),
+            "depth_levels_returned": depth_limit,
+            "bid_quantity_top_depth": str(bid_quantity),
+            "ask_quantity_top_depth": str(ask_quantity),
+            "top_depth_imbalance": str(depth_imbalance),
+            "bids": [[str(level.price), str(level.quantity)] for level in bids],
+            "asks": [[str(level.price), str(level.quantity)] for level in asks],
+            "market_metrics_are_descriptive": True,
             "read_only": True,
             "orders_submitted": False,
         }
