@@ -1,44 +1,38 @@
 # Contributing to ARASH Foundation
 
-Thank you for helping improve ARASH. The primary goals are research integrity, explicit risk boundaries, reproducibility, and maintainable engineering.
+Thank you for helping improve ARASH. The project's priorities are research integrity, explicit risk boundaries, reproducibility, and maintainable engineering.
 
-## Current state
+## Current repository state
 
-This repository currently contains the public documentation layer; source synchronization is still outstanding. Until the source package and test suite are published, contributions should focus on documentation accuracy and review. Do not invent installation steps or report test results that have not been reproduced.
+The public repository is currently the documentation layer for the supplied 28.0.0 reference archive. The source tree and tests still need to be synchronized. Until then, contributions should focus on documentation accuracy and review.
 
-## Before proposing a change
+## Engineering expectations
 
-- Describe the problem, the expected behavior, and the evidence that demonstrates the issue.
-- Identify affected data contracts, report schemas, database migrations, risk rules, or command-line interfaces.
-- Keep synthetic research fixtures clearly labeled and deterministic.
-- Separate implemented behavior from proposed behavior.
-
-## Engineering expectations once source is synchronized
-
-- Prefer small, focused changes with clear responsibility and actionable error handling.
+- Describe the problem, expected behavior, and evidence for the issue.
+- Keep changes focused and errors actionable.
 - Preserve offline-by-default behavior for tests and research examples.
-- Add regression coverage for each behavior change and run the relevant test group.
-- Run the complete release gate before presenting a change as release-ready.
-- Keep lint, compatibility, or infrastructure checks marked incomplete when they were not run.
-- Do not add a live-order path, credential collection, or hidden network behavior as part of a routine feature change.
+- Add regression coverage for behavior changes once the source tree is available.
+- Report tests, lint, compatibility, and infrastructure checks accurately, including unavailable checks.
+- Distinguish implemented behavior from planned behavior.
+- Do not add live-order submission, credential collection, or hidden network behavior as a routine feature.
 
 ## Research integrity
 
-Research-related changes should preserve temporal separation, dataset/configuration identity, candidate-family definitions, transaction-cost assumptions, and explicit limitations. If a test uses synthetic data, say so. A successful unit test is evidence of the behavior tested; it is not proof of strategy profitability.
+Preserve dataset/configuration identity, chronological evaluation, candidate-family definitions, transaction-cost assumptions, and explicit limitations. Label synthetic fixtures. A successful test is evidence only for the behavior it tests; it is not proof of strategy profitability.
 
-## Security and sensitive files
+## Security
 
-Never commit API keys, passwords, tokens, account identifiers, personal datasets, local ledgers, private reports, or environment files. Review the final diff before pushing. Read [Security Reporting](SECURITY.md) before publishing details of a potential vulnerability.
+Never commit API keys, passwords, tokens, account identifiers, private datasets, local ledgers, environment files, or unrelated personal information. Review the final diff before pushing. See [Security Policy](SECURITY.md).
 
 ## Pull request checklist
 
 - [ ] The change is scoped and its motivation is explained.
 - [ ] Documentation distinguishes current behavior from future intent.
-- [ ] Tests and checks are reported accurately, including skipped or incomplete items.
-- [ ] Generated files and local machine artifacts are excluded unless intentionally required.
+- [ ] Test results include skipped or incomplete checks.
+- [ ] Generated files and local machine artifacts are excluded unless required.
 - [ ] No secrets, account data, or unauthorized datasets are included.
-- [ ] Any new risk behavior includes regression tests and explicit failure semantics.
+- [ ] New risk behavior has regression tests and explicit failure semantics.
 
 ## License
 
-No license has been selected for this repository yet. Until a license is added, do not assume that public visibility grants permission to reuse or redistribute the code.
+The reference package declares a proprietary license placeholder pending a decision by the project owner. Until an explicit license is published, do not assume public visibility grants permission to reuse or redistribute the code.
