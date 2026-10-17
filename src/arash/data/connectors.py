@@ -32,10 +32,11 @@ class CandleRequest:
             raise ValueError("count must be between 1 and 500")
         if not 0.5 <= self.timeout_seconds <= 20:
             raise ValueError("timeout_seconds must be between 0.5 and 20")
-        if self.requested_to is not None and (
-            self.requested_to.tzinfo is None or self.requested_to.utcoffset() is None
-        ):
-            raise ValueError("requested_to must be timezone-aware")
+        if self.requested_to is not None:
+            if self.requested_to.tzinfo is None or self.requested_to.utcoffset() is None:
+                raise ValueError("requested_to must be timezone-aware")
+            if self.requested_to.astimezone(timezone.utc) > datetime.now(timezone.utc):
+                raise ValueError("requested_to cannot be in the future; future-dated market data is not admissible")
 
 
 @dataclass(frozen=True, slots=True)
