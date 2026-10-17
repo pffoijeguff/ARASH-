@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "arash-trading-intelligence"
 version = "28.0.0"
-description = "Offline-first quantitative research, risk diagnostics, and paper-execution tooling."
+description = "Research-driven quantitative trading intelligence, execution-aware simulation, and risk controls."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary - project owner to define" }
