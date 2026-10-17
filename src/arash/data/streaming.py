@@ -305,9 +305,9 @@ def _unpack_message(raw_message: str | bytes, expected_channel: str) -> tuple[di
         try:
             data = json.loads(data)
         except json.JSONDecodeError as exc:
-            raise PublicMarketStreamError("Order-book publication data is not valid JSON") from exc
+            raise PublicMarketStreamError("Market publication data is not valid JSON") from exc
     if not isinstance(data, dict):
-        raise PublicMarketStreamError("Order-book publication data must be an object")
+        raise PublicMarketStreamError("Market publication data must be an object")
     offset = publication.get("offset")
     if offset is not None:
         try:
@@ -397,7 +397,7 @@ def parse_public_trade_message(
     if timestamp_ms <= 0:
         raise PublicMarketStreamError("trade time must be a positive Unix timestamp")
     side = data.get("type")
-    if side not in {"buy", "sell"}:
+    if not isinstance(side, str) or side not in {"buy", "sell"}:
         raise PublicMarketStreamError("trade type must be 'buy' or 'sell'")
     try:
         trade = PublicTrade(
@@ -554,8 +554,24 @@ async def stream_public_market_data(
     trade_channel = f"public:trades-{normalized_symbol}"
     reconnects = 0
     last_snapshot_at: datetime | None = None
+
+    async def deliver_monotonic(snapshot: OrderBookSnapshot) -> None:
+        nonlocal last_snapshot_at
+        if last_snapshot_at is not None and snapshot.exchange_timestamp < last_snapshot_at:
+            return
+        last_snapshot_at = snapshot.exchange_timestamp
+        await _deliver(on_snapshot, snapshot)
+
     while stop_event is None or not stop_event.is_set():
         try:
+            initial_snapshot = await asyncio.to_thread(
+                fetch_initial_public_orderbook,
+                normalized_symbol,
+            )
+            await deliver_monotonic(initial_snapshot)
+            if stop_event is not None and stop_event.is_set():
+                return
+
             async with connect(
                 NOBITEX_WEBSOCKET_URL,
                 open_timeout=10,
@@ -579,13 +595,6 @@ async def stream_public_market_data(
                 await websocket.send(
                     json.dumps({"id": 2, "subscribe": {"channel": channel}})
                 )
-
-                async def deliver_monotonic(snapshot: OrderBookSnapshot) -> None:
-                    nonlocal last_snapshot_at
-                    if last_snapshot_at is not None and snapshot.exchange_timestamp < last_snapshot_at:
-                        return
-                    last_snapshot_at = snapshot.exchange_timestamp
-                    await _deliver(on_snapshot, snapshot)
 
                 await _wait_for_ack(
                     websocket,
@@ -612,14 +621,6 @@ async def stream_public_market_data(
                     )
                     if stop_event is not None and stop_event.is_set():
                         return
-
-                initial_snapshot = await asyncio.to_thread(
-                    fetch_initial_public_orderbook,
-                    normalized_symbol,
-                )
-                await deliver_monotonic(initial_snapshot)
-                if stop_event is not None and stop_event.is_set():
-                    return
 
                 while stop_event is None or not stop_event.is_set():
                     try:
