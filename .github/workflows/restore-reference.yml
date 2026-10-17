@@ -1,0 +1,126 @@
+name: Restore canonical ARASH Foundation 28.0.0 source
+
+on:
+  push:
+    branches:
+      - reference-source-restore-28.0.0
+    paths:
+      - ".restore/reference_payload/**"
+
+permissions:
+  contents: write
+
+jobs:
+  restore-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout restoration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore canonical source, tests, and documentation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          import hashlib
+          import shutil
+          import tarfile
+          import tempfile
+          from pathlib import Path
+
+          repo = Path.cwd()
+          chunks = sorted((repo / ".restore" / "reference_payload").glob("part-*.b64"))
+          if not chunks:
+              raise SystemExit("Reference payload chunks are missing.")
+          payload = base64.b64decode("".join(p.read_text(encoding="ascii").strip() for p in chunks), validate=True)
+          digest = hashlib.sha256(payload).hexdigest()
+          expected = "3ec332b948521d14a07781f63970d9017da60274ac08b6177c8d4eabca9d436e"
+          if digest != expected:
+              raise SystemExit(f"Reference payload SHA-256 mismatch: {digest}")
+
+          prefix = "ARASH_Foundation_28.0.0/"
+          with tempfile.TemporaryDirectory(prefix="arash-reference-") as tmp:
+              with tarfile.open(fileobj=__import__("io").BytesIO(payload), mode="r:gz") as archive:
+                  members = archive.getmembers()
+                  for member in members:
+                      path = Path(member.name)
+                      if not member.name.startswith(prefix) or path.is_absolute() or ".." in path.parts or member.issym() or member.islnk():
+                          raise SystemExit(f"Unsafe or unexpected archive member: {member.name}")
+                  archive.extractall(tmp)
+              reference = Path(tmp) / "ARASH_Foundation_28.0.0"
+
+              directories = ("src", "tests", "sample_data", "config", "examples", "scripts", "docs", "artifacts", ".github/workflows")
+              for relative in directories:
+                  target = repo / relative
+                  if target.exists():
+                      shutil.rmtree(target)
+                  source = reference / relative
+                  if source.exists():
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      shutil.copytree(source, target)
+
+              root_files = (
+                  ".env.example", ".gitignore", "ARASH_CHANGELOG_28.0.0.md",
+                  "ARASH_RELEASE_GATE_28.0.0.json", "CHANGELOG.md", "CONTRIBUTING.md",
+                  "README.md", "README.fa.md", "ROADMAP.md", "SECURITY.md", "pyproject.toml",
+              )
+              for relative in root_files:
+                  source = reference / relative
+                  if source.is_file():
+                      shutil.copy2(source, repo / relative)
+
+          # The replacement tree intentionally excludes this one-shot restoration machinery.
+          shutil.rmtree(repo / ".restore", ignore_errors=True)
+          (repo / ".github" / "workflows" / "restore-reference.yml").unlink(missing_ok=True)
+
+          # Replace the stale manifest with evidence tied to the original archive bytes.
+          manifest = repo / "docs" / "SOURCE_SYNC_MANIFEST.md"
+          manifest.write_text("""          # Source Synchronization Manifest
+
+          - Reference archive: ARASH Foundation 28.0.0
+          - Reference ZIP SHA-256: 4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b
+          - Restoration payload SHA-256: 3ec332b948521d14a07781f63970d9017da60274ac08b6177c8d4eabca9d436e
+          - Project version: 28.0.0
+
+          The reduced reconstructed source tree was replaced with the checked-in implementation from the reference archive, including the complete CLI, paper broker, SQLite store, supporting modules, sample data, release gate, project metadata, and all 41 test modules.
+
+          The restoration payload is SHA-256-verified before extraction. Its paths are checked to stay within the expected project root, and the source and tests directories are replaced rather than overlaid. The full release gate is run against the restored working tree before the restoration commit is created.
+
+          Integrity hashes confirm the bytes used for restoration; they do not establish market-data authenticity or guarantee trading performance.
+          """, encoding="utf-8")
+
+          assert (repo / "src/arash/cli.py").is_file()
+          assert (repo / "src/arash/paper/broker.py").is_file()
+          assert (repo / "src/arash/storage/sqlite_store.py").is_file()
+          assert len(list((repo / "tests").glob("test_*.py"))) == 41
+          print(f"Verified restoration payload {digest}: full source and all 41 test modules restored.")
+          PY
+
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run full release-acceptance gate
+        run: python scripts/release_gate.py --output "$RUNNER_TEMP/release-gate-28.0.0.json" --pytest-timeout-seconds 240 --jobs 2
+
+      - name: Preserve current release-gate evidence
+        run: |
+          mkdir -p artifacts
+          cp "$RUNNER_TEMP/release-gate-28.0.0.json" artifacts/release-gate-28.0.0.json
+
+      - name: Commit canonical source restoration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git add -f artifacts/release-gate-28.0.0.json
+          git commit -m "restore: synchronize full ARASH Foundation 28.0.0 reference source"
+          git push origin HEAD:reference-source-restore-28.0.0
