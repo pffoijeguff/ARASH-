@@ -32,7 +32,7 @@ jobs:
           complete = len(p) == 46 and total == 366328
           print(f"Archive chunks: {len(p)}/46; encoded characters: {total}/366328")
           with open(__import__("os").environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"complete={'true' if complete else 'false'}\\n")
+              out.write(f"complete={'true' if complete else 'false'}\n")
           PY
 
       - name: Set up Python
@@ -118,19 +118,19 @@ jobs:
               cli_path = repo / "src/arash/cli.py"
               cli = cli_path.read_text(encoding="utf-8")
               if "stream_public_market_data" not in cli:
-                  cli = cli.replace("import argparse\\n", "import argparse\\nimport asyncio\\n", 1)
-                  anchor = "from arash import __version__\\n"
+                  cli = cli.replace("import argparse\n", "import argparse\nimport asyncio\n", 1)
+                  anchor = "from arash import __version__\n"
                   if anchor not in cli:
                       raise SystemExit("Reference CLI import anchor was not found.")
                   imports = (
-                      "from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data\\n"
-                      "from arash.research.streaming_features import StreamingMicrostructureFeatures\\n"
-                      "from arash.research.pbo import estimate_probability_of_backtest_overfitting\\n"
-                      "from arash.research.return_statistics import bootstrap_return_statistics\\n"
+                      "from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data\n"
+                      "from arash.research.streaming_features import StreamingMicrostructureFeatures\n"
+                      "from arash.research.pbo import estimate_probability_of_backtest_overfitting\n"
+                      "from arash.research.return_statistics import bootstrap_return_statistics\n"
                   )
                   cli = cli.replace(anchor, anchor + imports, 1)
 
-              parser_anchor = "    args = parser.parse_args(argv)\\n"
+              parser_anchor = "    args = parser.parse_args(argv)\n"
               if 'subparsers.add_parser("pbo-audit"' not in cli:
                   parser_additions = '''    pbo_parser = subparsers.add_parser("pbo-audit", help="Estimate backtest-selection instability with CSCV/PBO")
               pbo_parser.add_argument("path", help="JSON file containing candidate_returns")
@@ -158,10 +158,10 @@ jobs:
                       raise SystemExit("Reference CLI parser insertion anchor was not unique.")
                   cli = cli.replace(parser_anchor, parser_additions + parser_anchor, 1)
 
-              handler_anchor = "    try:\\n        store = _store_from_args(args)\\n"
+              handler_anchor = "    try:\n        store = _store_from_args(args)\n"
               if 'if args.command == "return-stats":' not in cli:
                   handler = '''    try:
-              if args.command == "pbo-audit":
+                  if args.command == "pbo-audit":
                   input_path = Path(args.path)
                   if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
                       raise ValueError("PBO input must be an existing JSON file no larger than 5 MB")
@@ -171,7 +171,7 @@ jobs:
                       raise ValueError("PBO input must be a JSON object with a candidate_returns object")
                   report = estimate_probability_of_backtest_overfitting(payload["candidate_returns"], blocks=args.blocks)
                   report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
-                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\\n"
+                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\n"
                   if args.output:
                       output = Path(args.output)
                       output.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +179,7 @@ jobs:
                   print(rendered, end="")
                   return 0
 
-              if args.command == "return-stats":
+                  if args.command == "return-stats":
                   input_path = Path(args.path)
                   if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
                       raise ValueError("return-statistics input must be an existing JSON file no larger than 5 MB")
@@ -193,7 +193,7 @@ jobs:
                       periods_per_year=args.periods_per_year,
                   )
                   report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
-                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\\n"
+                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\n"
                   if args.output:
                       output = Path(args.output)
                       output.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +201,7 @@ jobs:
                   print(rendered, end="")
                   return 0
 
-              if args.command == "market-stream":
+                  if args.command == "market-stream":
                   if args.max_events < 0:
                       raise ValueError("--max-events must be zero or a positive integer")
                   if not 1 <= args.depth_levels <= 500:
@@ -226,7 +226,7 @@ jobs:
                   ))
                   return 0
 
-              store = _store_from_args(args)
+                  store = _store_from_args(args)
 '''
                   if handler_anchor not in cli:
                       raise SystemExit("Reference CLI dispatch anchor was not found.")
@@ -241,8 +241,8 @@ jobs:
               pytext = pyproject.read_text(encoding="utf-8")
               if "marketstream =" not in pytext:
                   pytext = pytext.replace(
-                      'dev = ["pytest>=8.0", "ruff>=0.6"]\\n',
-                      'dev = ["pytest>=8.0", "ruff>=0.6"]\\nmarketstream = ["websockets>=13.0"]\\n',
+                      'dev = ["pytest>=8.0", "ruff>=0.6"]\n',
+                      'dev = ["pytest>=8.0", "ruff>=0.6"]\nmarketstream = ["websockets>=13.0"]\n',
                       1,
                   )
               pyproject.write_text(pytext, encoding="utf-8")
