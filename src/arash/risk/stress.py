@@ -86,7 +86,7 @@ def build_portfolio_stress_report(
     """Create a risk audit plus systematic and single-name market-shock scenarios.
 
     Historical equity snapshots inform the daily baseline and observed peak, just as
-    they do in :func:\`audit_portfolio_risk\`. Each stress scenario revalues the existing
+    they do in :func:`audit_portfolio_risk`. Each stress scenario revalues the existing
     positions from their caller-provided marks; it does not model future orders or fees.
     """
     policy = policy or RiskPolicy()
