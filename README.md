@@ -23,7 +23,7 @@ ARASH is designed to grow beyond a collection of indicators or a candle-loop scr
 | Live order-book and trade streams with rolling flow features | src/arash/data/streaming.py and src/arash/research/streaming_features.py |
 | Microprice, spread, displayed depth imbalance, reported-side trade notional imbalance and rolling VWAP | Live microstructure feature engine |
 | Baseline backtests and chronological holdout evaluation | src/arash/research |
-| Robustness, candidate-family and selection-bias diagnostics | src/arash/research |
+| Robustness, candidate-family, CSCV/PBO and block-bootstrap uncertainty diagnostics | src/arash/research |
 | Market-regime and descriptive market-intelligence reports | CLI and research modules |
 | Explicit position sizing and risk diagnostics | src/arash/risk |
 | Persistent paper-account records and safety controls | src/arash/paper and src/arash/storage |
@@ -49,6 +49,7 @@ Useful starting commands:
     python -m arash csv-validate sample_data/research_demo_320.csv
     python -m arash backtest sample_data/research_demo_320.csv --strategy buy-hold
     python -m arash market-intelligence sample_data/research_demo_320.csv
+    python -m arash return-stats sample_data/return_stats_demo.json --iterations 2000 --block-length 5
 
 For a live read-only public order-book stream (requires the optional WebSocket dependency):
 
