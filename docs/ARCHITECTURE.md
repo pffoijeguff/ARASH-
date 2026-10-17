@@ -69,7 +69,7 @@ A resilient runtime should also include bounded queues, idempotent command ident
 - src/arash/storage: local SQLite persistence.
 - src/arash/reporting: report and provenance utilities.
 
-The current branch already contains useful data, research, risk and paper-simulation foundations. A real-time event runtime, order-book-aware execution, exchange order routing, venue reconciliation and production-grade monitoring remain future implementation milestones. Current public-market connectors are read-only; the branch should not be assumed to submit live orders.
+The current branch contains an initial real-time public order-book stream and market-quality observations, alongside research, risk and paper-simulation foundations. A resilient multi-market event runtime, order-book-aware execution, exchange order routing, venue reconciliation and production-grade monitoring remain future implementation milestones. Current public-market connectors are read-only; the branch should not be assumed to submit live orders.
 
 ## Performance principles
 
