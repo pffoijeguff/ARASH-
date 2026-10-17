@@ -15,7 +15,7 @@ from arash import __version__
 from arash.data.csv_loader import load_candles_csv
 from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
-from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_orderbook
+from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data
 from arash.research.streaming_features import StreamingMicrostructureFeatures
 from arash.data.reconcile import reconcile_market_data
 from arash.storage.sqlite_store import SQLiteStore
@@ -111,9 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     market.add_argument("--timeout-seconds", type=float, default=8.0)
     market.add_argument("--output")
 
-    market_stream = commands.add_parser("market-stream", help="Stream public live order-book snapshots without trading permissions")
+    market_stream = commands.add_parser("market-stream", help="Stream public order-book and trade data with rolling microstructure features")
     market_stream.add_argument("--symbol", required=True, help="Market symbol, for example BTCIRT")
-    market_stream.add_argument("--max-events", type=int, default=0, help="Stop after this many snapshots; 0 streams until interrupted")
+    market_stream.add_argument("--max-events", type=int, default=0, help="Stop after this many market events; 0 streams until interrupted")
     market_stream.add_argument("--max-reconnects", type=int, default=5, help="Maximum consecutive reconnect attempts")
     market_stream.add_argument("--depth-levels", type=int, default=10, help="Order-book levels per side to include in each JSON event (1-500)")
     market_stream.add_argument("--flow-window-seconds", type=int, default=60, help="Rolling reported-trade flow window in seconds (5-3600)")
@@ -465,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
                     stop_event.set()
 
             try:
-                asyncio.run(stream_public_orderbook(
+                asyncio.run(stream_public_market_data(
                     args.symbol,
                     emit_snapshot,
                     on_trade=emit_snapshot,
