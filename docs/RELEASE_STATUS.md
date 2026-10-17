@@ -9,9 +9,8 @@ The current branch contains market-data quality and public candle ingestion, an 
 ## Current implementation boundary
 
 - Public market-data adapters are read-only; the initial live WebSocket path publishes descriptive order-book snapshots only.
-- Production exchange order routing, user-account channels and venue-side order/fill reconciliation are not implemented in this branch.
 - Historical replay and paper execution are supported as research/simulation modes.
-- Production exchange order routing, venue-side reconciliation and the complete real-time operating stack remain development milestones.
+- Production exchange order routing, user-account channels, venue-side order/fill reconciliation and the complete real-time operating stack remain development milestones.
 - Some components were reconstructed or normalized during synchronization and have not been proven byte-for-byte or behavior-for-behavior identical to the reference archive.
 
 ## Verification status
