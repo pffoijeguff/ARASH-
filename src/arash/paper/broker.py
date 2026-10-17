@@ -393,7 +393,7 @@ class PaperBroker:
 
             if reason is not None:
                 conn.execute(
-                    "INSERT INTO paper_orders VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO paper_orders VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (order_id, account_id, client_order_id, fingerprint, symbol, side, str(quantity),
                      str(reference_price), None, None, "REJECTED", reason, requested.isoformat(), None, base, quote),
                 )
@@ -442,7 +442,7 @@ class PaperBroker:
             conn.execute("UPDATE paper_accounts SET cash=? WHERE account_id=?", (str(new_cash), account_id))
             filled = requested.isoformat()
             conn.execute(
-                "INSERT INTO paper_orders VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO paper_orders VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (order_id, account_id, client_order_id, fingerprint, symbol, side, str(quantity),
                  str(reference_price), str(fill_price), str(fee), "FILLED", None,
                  requested.isoformat(), filled, base, quote),
