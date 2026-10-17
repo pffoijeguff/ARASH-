@@ -29,7 +29,7 @@ ARASH is designed to grow beyond a collection of indicators or a candle-loop scr
 | Persistent paper-account records and safety controls | src/arash/paper and src/arash/storage |
 | Execution-cost scenarios, stress cases and research manifests | paper, research and reporting modules |
 
-Historical replay and local research are controlled modes within the engineering toolkit; they are not the definition or long-term ambition of ARASH. Online market-data ingestion is now represented by an initial public order-book stream with bounded reconnects and descriptive microstructure measurements. Execution-aware decisioning and a carefully controlled path from research to paper operation remain central architectural objectives. Production order routing and the complete real-time operational stack remain development milestones, not features to assume are already available in this branch.
+Historical replay and local research are controlled modes within the engineering toolkit; they are not the definition or long-term ambition of ARASH. Online market-data ingestion is now represented by a public order-book and trade stream with REST bootstrap, bounded reconnects and descriptive rolling microstructure measurements. Execution-aware decisioning and a carefully controlled path from research to paper operation remain central architectural objectives. Production order routing and the complete real-time operational stack remain development milestones, not features to assume are already available in this branch.
 
 ## Quick start
 
@@ -51,7 +51,7 @@ Useful starting commands:
     python -m arash market-intelligence sample_data/research_demo_320.csv
     python -m arash return-stats sample_data/return_stats_demo.json --iterations 2000 --block-length 5
 
-For a live read-only public order-book stream (requires the optional WebSocket dependency):
+For a live read-only public market stream (requires the optional WebSocket dependency):
 
     python -m pip install ".[marketstream]"
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
