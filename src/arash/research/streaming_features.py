@@ -112,6 +112,7 @@ class StreamingMicrostructureFeatures:
         book = self._latest_book
         book_data: dict[str, Any] | None = None
         if book is not None:
+            book_metrics = book.to_dict(depth_limit=self.depth_limit)
             book_data = {
                 "book_timestamp": book.exchange_timestamp.isoformat(),
                 "book_received_at": book.received_at.isoformat(),
@@ -121,13 +122,9 @@ class StreamingMicrostructureFeatures:
                 "best_bid": str(book.best_bid),
                 "best_ask": str(book.best_ask),
                 "midpoint": str(book.midpoint),
-                "microprice": str(
-                    book.to_dict(depth_limit=self.depth_limit)["microprice"]
-                ),
+                "microprice": book_metrics["microprice"],
                 "spread_bps": str(book.spread_bps),
-                "top_depth_imbalance": book.to_dict(
-                    depth_limit=self.depth_limit
-                )["top_depth_imbalance"],
+                "top_depth_imbalance": book_metrics["top_depth_imbalance"],
             }
         return {
             "window_seconds": self.window_seconds,
