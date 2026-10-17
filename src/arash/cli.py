@@ -1,4 +1,4 @@
-"""Command-line interface for offline data quality, read-only market data and risk analysis."""
+"""Command-line interface for research-driven quantitative trading intelligence and risk analysis."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from arash.research.quant_audit import audit_backtest_result
 from arash.research.regimes import analyze_market_regimes
 from arash.research.robustness import run_parameter_perturbations, run_chronological_subperiods
 from arash.research.selection_bias import audit_candidate_family
+from arash.research.pbo import estimate_probability_of_backtest_overfitting
 from arash.research.pipeline import run_research_pipeline
 
 
@@ -79,8 +80,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="arash",
         description=(
-            "ARASH Foundation: offline quantitative research, data quality, risk diagnostics "
-            "and simulated execution. No live order-submission command is supported."
+            "ARASH: research-driven quantitative trading intelligence, market-data diagnostics, "
+            "risk assessment and execution simulation. Production order routing is not available in this development branch."
         ),
     )
     parser.add_argument("--version", action="version", version=f"ARASH Foundation {__version__}")
@@ -242,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
     selection.add_argument("--returns-pct", type=_decimal, nargs="+", required=True)
     selection.add_argument("--declared-candidate-count", type=int)
     selection.add_argument("--output")
+
+    pbo = commands.add_parser("pbo-audit", help="Estimate backtest selection instability with CSCV")
+    pbo.add_argument("path", help="JSON file containing aligned candidate_returns arrays")
+    pbo.add_argument("--blocks", type=int, default=8, help="Even number of contiguous CSCV blocks (4-14)")
+    pbo.add_argument("--output")
 
     paper_create = commands.add_parser("paper-account-create", help="Create a local simulated paper account")
     paper_create.add_argument("--db", required=True)
@@ -597,6 +603,20 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "selection-bias-audit":
             result = audit_candidate_family(args.returns_pct, declared_candidate_count=args.declared_candidate_count)
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "pbo-audit":
+            report_path = Path(args.path)
+            if not report_path.is_file() or report_path.stat().st_size > 5_000_000:
+                raise ValueError("PBO input must be an existing JSON file no larger than 5 MB")
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or not isinstance(payload.get("candidate_returns"), dict):
+                raise ValueError("PBO input must be a JSON object with a candidate_returns object")
+            result = estimate_probability_of_backtest_overfitting(
+                payload["candidate_returns"], blocks=args.blocks
+            )
+            result["input_path"] = str(report_path)
             _print_json(result, args.output)
             return 0
 
