@@ -33,7 +33,7 @@ jobs:
         run: python -m pip check
       - name: Lint the newly added research and stream components
         run: >-
-          python -m ruff check
+          python -m ruff check --select E4,E7,E9,F
           src/arash/data/streaming.py
           src/arash/research/streaming_features.py
           src/arash/research/pbo.py
