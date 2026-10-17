@@ -2,47 +2,35 @@
 
 ## Operating mode
 
-ARASH Foundation 30.0.0 is documented as an offline research and paper-simulation package. Its recorded tests did not submit live orders, and the snapshot does not provide validated live-order execution. This is a core boundary, not a temporary configuration to switch on by changing a flag.
+ARASH Foundation 28.0.0 is documented as an offline research and paper-simulation package. Its recorded release checks used no network and submitted no live orders. This repository must not be interpreted as a live trading service.
 
-## Risk areas represented in the reference snapshot
+## Position sizing and portfolio exposure
 
-### Position sizing
+The 28.0.0 change record documents a correction to incremental position sizing: existing exposure in the same instrument is accounted for before sizing an additional BUY. The reference tests also cover rejection of same-instrument exposure that exceeds total portfolio exposure.
 
-Risk sizing evaluates proposed quantity against configured trade-risk limits and other constraints, including position-size limits, aggregate exposure, and available simulated cash. Calculation outputs depend on the supplied account values, marks, stop assumptions, and policy parameters. They are not guarantees against loss or gaps.
+Position limits depend on account values, valuation marks, policy parameters, and assumptions. They are not guarantees against gaps, liquidity changes, or losses.
 
-### Portfolio exposure
+## Mark freshness and stress diagnostics
 
-Exposure controls constrain simulated position or portfolio allocation. Results should disclose the valuation currency and assumptions. The reference reports make explicit when foreign-exchange conversion is disabled and when valuation uses caller-supplied marks rather than fetched market prices.
+Stale valuation marks can distort position value, equity, and exposure. Risk-sensitive workflows should retain mark timestamps and apply configured freshness limits. Portfolio stress analysis is a diagnostic tool; its scenarios are not predictions of future prices or maximum-loss guarantees.
 
-### Daily loss and drawdown
+## Paper execution
 
-Daily-loss and peak-to-trough drawdown controls can block additional exposure when configured thresholds are reached or breached. Correct use depends on a valid baseline, consistent time-zone rules, and current valuations. A limit breach should be visible in the report and should not be silently reset.
-
-### Mark freshness
-
-Stale valuation marks can distort position value, equity, exposure, and risk. Risk-sensitive workflows should flag or block decisions that rely on marks older than the configured threshold. The source and timestamp of marks should be retained.
-
-### Account kill switch
-
-The 29.0.0 change record documents a safety behavior: an active account kill switch blocks new BUY exposure while still allowing a valid SELL to reduce or close an existing long position. The switch remains active after a sell and requires an explicit, reasoned manual reset before BUY orders can resume. This behavior has regression-test evidence in the reference history; it is still a paper/research control and is not a claim about live exchange execution.
+Paper accounts and orders use simulated state. A paper fill is not a real exchange fill, and local simulated balances are not real funds. Reports should make this boundary explicit.
 
 ## Safe research practices
 
 1. Use synthetic data or authorized local datasets for examples and tests.
 2. Keep exchange credentials, API keys, account identifiers, local ledgers, and private datasets out of public commits.
 3. Do not embed secrets in source code, test fixtures, issue reports, or generated documentation.
-4. Preserve failed and incomplete checks in reports; do not edit a result to make a gate appear green.
-5. Avoid calling a simulated fill a real fill or describing a backtest as a live-trading result.
-6. Review schema changes and database migrations against backups or disposable local ledgers.
-
-## What risk controls do not provide
-
-Risk checks cannot eliminate volatility, gaps, slippage, liquidity changes, software defects, bad inputs, model error, strategy overfitting, or future losses. Risk thresholds are policy choices, not universal guarantees. Backtest and paper-simulation results may diverge materially from real venues.
+4. Preserve failed and incomplete checks in release reports.
+5. Review database migrations against disposable test databases or backups.
+6. Do not infer profitability from a backtest or infer production safety from a test count.
 
 ## Live trading
 
-No live-trading activation path is documented here. Any future proposal to add live execution must be treated as a separate, high-risk engineering project with an explicit threat model, credential isolation, venue-specific validation, durable order-state reconciliation, kill-switch testing, human approval, and an independently reviewed release process. It must not be inferred from research capability or paper-broker support.
+The reference snapshot is research/paper-only. Any future live-execution proposal would require a separate threat model, credential isolation, venue-specific validation, durable order-state reconciliation, kill-switch testing, human approval, and independent release review. Live trading must not be enabled implicitly by a research feature.
 
 ## Disclosure
 
-ARASH is a software and research project, not investment advice. Users are responsible for lawful data use, operational controls, and any decisions based on outputs.
+ARASH is a software and quantitative-research project, not investment advice. Users remain responsible for lawful data use, operational controls, and decisions based on any outputs.
