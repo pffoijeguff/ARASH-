@@ -1,36 +1,38 @@
-# Risk Controls and Safety Boundary
+# ARASH Risk and Operational Controls
 
-## Operating mode
+ARASH is being designed with a risk-first control plane. Signal quality cannot compensate for uncontrolled order flow, stale data, incorrect accounting or unrealistic execution assumptions.
 
-ARASH Foundation 28.0.0 is documented as an offline research and paper-simulation package. Its recorded release checks used no network and submitted no live orders. This repository must not be interpreted as a live trading service.
+## Current branch boundary
 
-## Position sizing and portfolio exposure
+The current source branch provides risk diagnostics, position sizing and a simulated paper-account workflow. Public market-data access is read-only. A simulated fill is not evidence of an exchange fill, and the current branch should not be assumed to submit live orders.
 
-The 28.0.0 change record documents a correction to incremental position sizing: existing exposure in the same instrument is accounted for before sizing an additional BUY. The reference tests also cover rejection of same-instrument exposure that exceeds total portfolio exposure.
+## Target pre-trade controls
 
-Position limits depend on account values, valuation marks, policy parameters, and assumptions. They are not guarantees against gaps, liquidity changes, or losses.
+- Instrument permission and order-type validation.
+- Maximum order notional, position size, gross/net exposure and concentration checks.
+- Price collars, quantity/precision validation and order-rate throttles.
+- Explicit fee, spread, slippage and minimum-notional assumptions.
+- Stale-market-data and excessive-feed-lag rejection.
+- Daily loss, drawdown and instrument-level circuit breakers.
+- Persistent global and per-strategy kill switches that fail closed.
+- Idempotent client order identifiers and prevention of duplicate submission.
+- Clear reject reasons, durable audit records and post-restart reconciliation.
 
-## Mark freshness and stress diagnostics
+## Operational failure modes to design for
 
-Stale valuation marks can distort position value, equity, and exposure. Risk-sensitive workflows should retain mark timestamps and apply configured freshness limits. Portfolio stress analysis is a diagnostic tool; its scenarios are not predictions of future prices or maximum-loss guarantees.
+- Exchange disconnects, API timeouts, rate limits and partial responses.
+- Out-of-order, duplicated, stale or missing market events.
+- Partial fills, rejected orders and ambiguous submission acknowledgements.
+- Differences between internal and venue balances, positions or open orders.
+- Unexpected fees, market impact, funding/borrow costs and liquidity gaps.
+- A strategy, data feed or model becoming unstable after a regime change.
 
-## Paper execution
+When internal and external state disagree, the system should stop increasing risk until it has reconciled the discrepancy. Restart behavior, retry policy and stop-state persistence must be explicit.
 
-Paper accounts and orders use simulated state. A paper fill is not a real exchange fill, and local simulated balances are not real funds. Reports should make this boundary explicit.
+## Research and execution interpretation
 
-## Safe research practices
+Historical simulation, paper trading and stress tests establish behavior only under their declared data and assumptions. They cannot guarantee capital preservation or future returns. Risk outputs are only as sound as their marks, exposures, currency units, timing, fees and policy inputs.
 
-1. Use synthetic data or authorized local datasets for examples and tests.
-2. Keep exchange credentials, API keys, account identifiers, local ledgers, and private datasets out of public commits.
-3. Do not embed secrets in source code, test fixtures, issue reports, or generated documentation.
-4. Preserve failed and incomplete checks in release reports.
-5. Review database migrations against disposable test databases or backups.
-6. Do not infer profitability from a backtest or infer production safety from a test count.
+## Development status
 
-## Live trading
-
-The reference snapshot is research/paper-only. Any future live-execution proposal would require a separate threat model, credential isolation, venue-specific validation, durable order-state reconciliation, kill-switch testing, human approval, and independent release review. Live trading must not be enabled implicitly by a research feature.
-
-## Disclosure
-
-ARASH is a software and quantitative-research project, not investment advice. Users remain responsible for lawful data use, operational controls, and decisions based on any outputs.
+Controls and adapters are being developed iteratively. The current branch may contain defects or incomplete integrations; it is not a verified production release.

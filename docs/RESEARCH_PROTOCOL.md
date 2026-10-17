@@ -1,45 +1,46 @@
-# Research Protocol and Evidence Standards
+# ARASH Research Protocol
 
-## Objective
+The goal of ARASH research is not to find a configuration with the highest historical return. It is to determine whether a clearly specified hypothesis survives leakage control, meaningful baselines, realistic trading costs, parameter uncertainty and changes in market conditions.
 
-ARASH should make quantitative experiments reproducible and keep the limits of their evidence explicit. This protocol is a research standard, not a claim that any strategy is profitable.
+## Minimum evidence contract
 
-## 1. Define the experiment
+Every research run should record:
 
-Record the dataset identity, symbol and interval, date range, configuration, benchmark, candidate family, evaluation method, and transaction-cost assumptions. Treat material changes as a new experiment rather than silently rewriting the old one.
+- dataset source, venue, instrument, time range, timezone and event/receive-time convention;
+- data version or content digest, corrections, missing intervals and quality findings;
+- code version, feature definitions, strategy/model version, parameters and random seeds where applicable;
+- the full number and family of attempted configurations, including failed or discarded candidates;
+- benchmark definitions, fees, spread, slippage, liquidity and financing assumptions;
+- training, validation and final holdout windows, with a clear separation between them;
+- gross and net returns, turnover, exposure, drawdown, tail outcomes and uncertainty measures;
+- artifact manifest sufficient to reproduce and review the experiment.
 
-## 2. Validate the inputs
+## Validation protocol
 
-Check for malformed values, duplicate or unordered timestamps, gaps, stale data, mixed instruments or intervals, and unclear provenance. Preserve warnings in reports and block runs when required assumptions are violated.
+1. **Declare the hypothesis first.** Specify the signal, instrument universe, horizon, decision timestamp, expected mechanism and falsifiable alternative.
+2. **Validate point-in-time data.** Reject look-ahead, duplicate events, incorrect ordering, stale observations, survivorship-contaminated universes and features unavailable at decision time.
+3. **Use time-respecting splits.** Keep a chronological holdout untouched during development. Do not randomly shuffle financial time series.
+4. **Purge overlapping information.** Where labels or positions overlap across time, use purging and an embargo appropriate to the label horizon. Investigate CPCV/Combinatorial Purged Cross-Validation where its assumptions fit the question.
+5. **Account for selection.** Preserve the full candidate ledger. Report how many alternatives were tried and consider Probability of Backtest Overfitting (PBO), Deflated Sharpe Ratio (DSR), and other multiple-testing controls when interpreting selected results.
+6. **Model net execution economics.** Include fees, spread, slippage, latency, partial fills, rejections, market impact, financing/funding and capacity assumptions as relevant to the instrument and venue.
+7. **Use meaningful baselines.** Compare with simple predeclared alternatives and benchmark-relative metrics. Complexity must justify itself out of sample.
+8. **Stress uncertainty.** Perturb parameters and costs; assess multiple market regimes, volatility/liquidity conditions, tail events and delayed or missed execution.
+9. **Repeat without tuning on the final holdout.** Any decision influenced by holdout results consumes that evidence and requires a fresh evaluation set.
+10. **Preserve and communicate the result.** Store the manifest, configuration, outputs and limitations. A negative result is a useful result and should not be silently discarded.
 
-## 3. Prevent temporal leakage
+## Metrics to report
 
-Use chronological splits. Keep evaluation windows separate from strategy selection, tuning, and transformations that learn from data. A focused look-ahead check only supports the specific behavior it tests; it is not universal proof that all leakage is absent.
+Where suitable for the data and strategy, report net return and benchmark-relative return, annualized volatility with its assumptions, Sharpe/Sortino with caveats, maximum drawdown, drawdown duration and recovery, turnover, exposure, trade count, hit rate, average win/loss, tail losses, transaction-cost attribution, capacity sensitivity, and uncertainty/selection-bias diagnostics. No single metric should stand in for a complete risk/return profile.
 
-## 4. Evaluate out of sample
+## Machine learning and adaptive models
 
-Prefer chronological walk-forward evaluation to a single favorable in-sample result. Document fold boundaries, overlap, aggregation method, and sample limitations. Inadequate evidence should remain inadequate rather than being converted into confidence.
+- Keep feature generation strictly point-in-time and fit preprocessing only on training folds.
+- Compare learned models with simple baselines on identical splits and cost assumptions.
+- Record training windows, feature versions, hyperparameter searches, artifacts and promotion decisions.
+- Monitor feature drift, prediction calibration, regime changes and net performance degradation.
+- Treat ensembles and complexity as hypotheses requiring evidence, not as automatic sources of edge.
+- Do not infer stable alpha merely from feature importance or in-sample predictive fit.
 
-## 5. Compare fairly
+## Interpretation
 
-Use a declared benchmark where appropriate. Explain gross versus net returns, cash treatment, exposure assumptions, and evaluation periods. Comparisons are misleading when the strategy and benchmark use materially different assumptions.
-
-## 6. Model execution friction
-
-Challenge results with relevant fees, spread, slippage, liquidity, capacity, and partial-fill assumptions. Bar-based simulations cannot fully reproduce order-book state, latency, queue position, or actual venue behavior.
-
-## 7. Account for selection bias
-
-Disclose how many candidates were tested and how the candidate family was formed. Where supported and appropriate, use multiple-testing corrections or selection-bias diagnostics. Do not present the best selected result as if it had been chosen independently of all other trials.
-
-## 8. Preserve evidence and limitations
-
-Keep machine-readable reports, experiment settings, dataset identity, and relevant test evidence together. Clearly distinguish synthetic examples from market observations. A file hash can detect byte changes, but it does not prove the source or truth of the file.
-
-## Version 28.0.0 change of note
-
-The release notes describe a position-sizing correction: existing exposure in the same instrument is deducted when sizing an additional BUY, and same-instrument exposure is validated against total portfolio exposure. The archive records regression tests for these cases.
-
-## Non-negotiable rule
-
-**A backtest, a passing software test, a paper fill, or a risk diagnostic does not prove profitability and does not authorize live trading.**
+Backtests and paper runs are models of specified data and assumptions. They are not promises of future results. Real market impact, fees, liquidity, latency, competition, market regime changes and data quality can erase apparent edges. ARASH should prefer evidence that is reproducible, economically plausible and robust to reasonable stress over a spectacular but fragile backtest.

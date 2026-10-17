@@ -1,0 +1,71 @@
+name: Restore ARASH 28.0.0 reference source
+
+on:
+  push:
+    branches: [source-sync-28.0.0]
+    paths:
+      - ".recovery/**"
+
+permissions:
+  contents: write
+
+jobs:
+  restore-reference:
+    if: ${{ !contains(github.event.head_commit.message, '[reference source restored]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: source-sync-28.0.0
+          fetch-depth: 0
+      - id: source
+        name: Wait for all verified archive chunks
+        run: python .github/scripts/restore_reference_source.py --check-only
+      - uses: actions/setup-python@v5
+        if: steps.source.outputs.complete == 'true'
+        with:
+          python-version: "3.13"
+      - name: Restore canonical source and integrate additive diagnostics
+        if: steps.source.outputs.complete == 'true'
+        run: python .github/scripts/restore_reference_source.py
+      - name: Install project and development dependencies
+        if: steps.source.outputs.complete == 'true'
+        run: python -m pip install -e ".[dev,marketstream]"
+      - name: Verify dependencies and compile source
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          python -m pip check
+          python -m compileall -q src tests scripts
+      - name: Run full release gate (reference suite + new regression tests)
+        if: steps.source.outputs.complete == 'true'
+        run: python scripts/release_gate.py --output artifacts/release-gate-branch.json --jobs 4 --pytest-timeout-seconds 240
+      - name: Verify new CLI integrations
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          python -m arash --help
+          python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output "$RUNNER_TEMP/pbo.json"
+          python -m arash return-stats sample_data/return_stats_demo.json --iterations 250 --block-length 5 --seed 17 --output "$RUNNER_TEMP/return-stats.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          pbo = json.loads((root / "pbo.json").read_text())
+          stats = json.loads((root / "return-stats.json").read_text())
+          assert pbo["status"] == "COMPLETED_DIAGNOSTIC"
+          assert pbo["trade_action"] == "NONE" and pbo["execution_enabled"] is False
+          assert stats["status"] == "COMPLETED_DIAGNOSTIC"
+          assert stats["trade_action"] == "NONE" and stats["execution_enabled"] is False
+          assert len(stats["input_sha256"]) == 64
+          print("PBO/return-statistics CLI integration assertions passed.")
+          PY
+      - name: Commit source only after the full gate passes
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/arash tests scripts/release_gate.py sample_data config examples pyproject.toml .env.example docs/SOURCE_SYNC_MANIFEST.md docs/INTEGRATION_AUDIT.md artifacts/release-gate-branch.json
+          git add .github/scripts/restore_reference_source.py
+          git add -u .recovery
+          git commit -m "fix: restore canonical 28.0.0 source and tests [reference source restored]"
+          git push origin HEAD:source-sync-28.0.0

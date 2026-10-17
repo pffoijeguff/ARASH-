@@ -1,54 +1,48 @@
-# Release and Verification Status
+# ARASH Development Status
 
-## Current reference snapshot
+## Product direction
 
-**Reference version:** ARASH Foundation 28.0.0  
-**Overall recorded release status:** `INCOMPLETE`  
-**Recorded environment:** CPython 3.13.5  
-**Network used during recorded checks:** No  
-**Live orders submitted:** No
+ARASH is being developed as an ambitious research-driven quantitative platform centered on adaptive market analysis, rigorous validation, execution realism, portfolio-aware risk and end-to-end auditability. The goal is a coherent path from market data and hypothesis research to paper operation and, only after appropriate engineering and verification, controlled execution.
 
-The 28.0.0 archive's machine-readable release gate records 24 checks passed, 0 failed, and 1 incomplete. Ruff was unavailable in the recorded environment; it must not be described as a successful lint run.
+The current development branch contains market-data quality and public candle ingestion, a read-only public WebSocket order-book and trades feed, descriptive microstructure features, backtesting and evaluation workflows, robustness diagnostics, CSCV/PBO selection-instability analysis, circular block-bootstrap return uncertainty, risk sizing, local paper-account bookkeeping, execution scenarios and report provenance.
 
-## Reported results
+## Current implementation boundary
 
-| Item | Recorded result | Notes |
-|---|---|---|
-| Automated tests | 301 passed | 10 pytest groups |
-| Smoke checks | 11/11 passed | Local-only; no live orders |
-| Test-module coverage audit | PASS | 41 referenced modules; no missing or unknown modules |
-| Python compilation | PASS | `compileall` completed |
-| Wheel integrity | PASS | Version, CLI entry point, required package files, and test-source exclusion checked |
-| Isolated install/import | PASS | Report records package version 28.0.0 |
-| Ruff | UNAVAILABLE | Ruff was not installed |
-| Python 3.12 | UNVERIFIED | Not independently verified |
-| Hosted GitHub Actions | UNVERIFIED | Not independently verified |
-| Full release gate | INCOMPLETE | 24 PASS, 0 FAIL, 1 INCOMPLETE |
+- Public market-data requests use public, read-only endpoints; the stream emits order-book/trade observations and does not submit exchange orders.
+- Historical replay and paper execution are research/simulation features.
+- Production exchange order routing, user-account channels, venue-side order/fill reconciliation and the complete real-time operating stack are not validated capabilities of this branch.
+- Some components were reconstructed or normalized during synchronization. Their source and behavior are not yet equivalent to the 28.0.0 reference archive.
 
-Source: `ARASH_RELEASE_GATE_28.0.0.json` and `ARASH_TEST_REPORT_28.0.0.fa.md` in the supplied archive, dated 2026-10-16. These are recorded archive results, not tests run against the current GitHub tree.
+## Verification status
 
-## Repository publication gap
+The latest focused branch CI run at code commit `24162f1e7bb3379f015f7a7b60501aac8ee61c3e` passed on Python 3.12 and 3.13. Each job installed the package and development extras, compiled source and tests, ran the checked-in regression tests, checked `python -m arash --help`, ran both synthetic research-diagnostic commands, and checked that their output makes no trading action.
 
-The supplied 28.0.0 archive is the selected source baseline, but its source files have not yet been synchronized into this GitHub repository. The repository therefore remains documentation-only and is not currently installable or runnable from GitHub.
+The checked-in branch currently has 17 regression cases covering PBO/return-statistics validation and public stream parsing/rolling-feature integration. This is a focused verification layer, not the full release gate. A passing CI smoke job does not establish correctness of every module or live provider compatibility. Full lint/security/release-gate checks and live WebSocket verification have not been completed.
 
-The archive's SHA-256 fingerprint is:
+The supplied reference ZIP separately records:
+- SHA-256: `4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b`
+- 301 test cases, 11/11 smoke checks, and a release-gate summary of 24 checks passed, zero failed and one incomplete because Ruff was unavailable.
 
-```text
-4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b
-```
+Those are reference-archive results, not results from the reconstructed Git branch.
 
-A matching fingerprint is useful for byte-level integrity checks; it does not independently prove who created the archive or that its contents are correct.
+## Source parity and merge gate
 
-## Required publication gates
+A structural check found important differences from the reference archive:
 
-1. Synchronize the reviewed source, tests, packaging metadata, scripts, examples, and configuration files from version 28.0.0.
-2. Exclude build outputs, generated `*.egg-info`, local databases, logs, private datasets, caches, and credentials.
-3. Keep the public-facing documentation in English and retain only relevant, reviewed project history.
-4. Re-run compilation, all tests, smoke checks, packaging validation, and the release gate from a clean checkout.
-5. Install Ruff and record its actual result.
-6. Verify the intended Python compatibility matrix and hosted CI.
-7. Publish installation instructions only after they have been tested against the synchronized tree.
+| Module | Reference archive | Development branch |
+| --- | ---: | ---: |
+| `src/arash/cli.py` | 2,331 lines | 750 lines |
+| `src/arash/paper/broker.py` | 1,248 lines | 635 lines |
+| `src/arash/storage/sqlite_store.py` | 1,343 lines | 610 lines |
+| `src/arash/paper/execution_batch.py` | 455 lines | 72 lines |
+| `src/arash/research/selection_bias.py` | 454 lines | 52 lines |
 
-## Versioning
+The command surface also differs, and the reference archive contains a much broader test suite. These are potential feature regressions, not cosmetic differences. Therefore the branch remains a draft and must **not** be merged to `main` as a synchronized 28.0.0 release until the reference source and tests are restored or every deviation is explicitly reviewed and validated.
 
-Version 28.0.0 identifies the supplied reference archive. It does not imply that this GitHub repository already contains that source tree or that a GitHub release has been published.
+## Immediate engineering priorities
+
+1. Restore exact reference source for existing 28.0.0 functionality before layering new research modules onto it.
+2. Run the reference test suite against that restored branch, then run lint, security and release-gate checks.
+3. Add hermetic protocol/feature tests and validate provider interaction separately from CI mocks.
+4. Preserve execution/risk boundaries and do not treat backtest diagnostics or software test results as evidence of strategy profitability.
+5. Decide and document the project license.

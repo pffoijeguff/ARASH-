@@ -1,57 +1,79 @@
-# ARASH Foundation — Architecture
+# ARASH System Architecture
 
-## Purpose
+## Design intent
 
-ARASH is organized around inspectable research inputs, explicit simulation assumptions, and visible risk boundaries. This document describes the logical component areas represented in the ARASH Foundation 28.0.0 reference archive. The current GitHub repository has not yet received the source tree, so this is an architecture overview rather than proof that the repository is runnable.
+ARASH is being engineered as a research-driven, online-capable quantitative trading platform—not as an offline-only tool. Local datasets and deterministic replay are important laboratory modes: they let the same questions be studied repeatedly, with controlled inputs. They do not replace the intended real-time data, portfolio, execution and operational layers.
 
-## Logical component map
+The core principle is separation of concerns with traceable contracts. A strategy proposes an intent; the portfolio layer converts intents into target exposure; an independent risk layer approves, constrains or rejects them; execution turns approved intents into orders; accounting records confirmed state; observability makes every transition inspectable.
 
-```mermaid
-flowchart LR
-    CSV[Local candle data] --> DATA[Ingestion and data-quality checks]
-    DATA --> MARKET[Market-data and research pipeline]
-    CONFIG[Research configuration] --> BACKTEST[Backtesting and evaluation]
-    MARKET --> BACKTEST
-    BACKTEST --> QUANT[Strategy comparison and quantitative audits]
-    QUANT --> PAPER[Paper broker and execution simulation]
-    RISK[Position and portfolio risk engine] --> PAPER
-    MARKET --> STORE[(Local SQLite storage)]
-    BACKTEST --> REPORTS[Reports and diagnostics]
-    PAPER --> STORE
-    RISK --> REPORTS
-    REPORTS --> REVIEW[Human review]
-```
+## Target architecture
 
-## Component responsibilities
+    Exchange and market data sources
+      - Public REST snapshots
+      - WebSocket trades, quotes and order-book updates
+      - Reference, funding and instrument metadata
+                    |
+                    v
+        Ingestion, normalization, quality gates
+                    |
+                    v
+        Event bus and point-in-time market state
+                    |
+           +--------+------------------+
+           |                           |
+           v                           v
+      Feature/regime services    Data quality and drift
+           |                           |
+           v                           |
+      Strategy/alpha/model registry    |
+           |                           |
+           v                           |
+      Portfolio construction <---------+
+           |
+           v
+      Independent pre-trade risk gate
+           |
+           v
+      Execution planner and venue adapter
+           |
+           v
+      Order, acknowledgement, fill and reconciliation events
+           |
+           v
+      Portfolio accounting and durable ledger
+           |
+           v
+      Metrics, alerts, run manifests and audit trail
 
-### Market data and quality
+A resilient runtime should also include bounded queues, idempotent command identifiers, timeouts, retry policies, stale-feed detection, sequence-gap handling, circuit breakers, rate-limit awareness, a global and per-strategy kill switch, and controlled recovery after restart. These controls are part of the design, not optional embellishments.
 
-The archive includes local CSV loading, candle-oriented workflows, data-health checks, and validation tests. Data should be checked for malformed fields, invalid or unordered timestamps, duplicate records, gaps, stale values, and mixed symbol or interval assumptions before downstream evaluation.
+## Architecture rules
 
-### Research and evaluation
+1. **Research/live semantic parity:** market replay, paper operation and any future live adapter should share domain contracts and decision logic wherever practical. Differences in latency and available data must be explicit, never silently ignored.
+2. **Data is a versioned input:** preserve source, venue, instrument, interval, event/receive timestamps, normalization rules, revisions and integrity digests. Prevent look-ahead, survivorship and stale-data contamination.
+3. **A strategy cannot bypass risk:** strategy code emits an intent; a separate control path owns exposure, order-size, price collars, rate limits, trading permissions and stop conditions.
+4. **Execution is a model and a system:** distinguish decision price, arrival price, limit/market behavior, fees, spread, slippage, queue position, partial fills, rejects, latency, market impact and venue-specific rules. Candle-based fills must never be described as exchange fills.
+5. **Accounting is authoritative:** derive positions, cash, fees, realized/unrealized P&L and exposure from normalized order/fill/ledger events; reconcile internal state against venue state before any real deployment.
+6. **Models are governed components:** version features, parameters, training data windows, model artifacts, benchmarks and promotion decisions. Monitor drift and use explicit rollback rules.
+7. **Evidence travels with results:** each research run should record code version, configuration, data fingerprint, instrument universe, time range, assumptions, benchmark, candidate count and outputs.
+8. **Fail safely:** stale data, invalid state, breached limits or a disconnected venue should reduce capability or halt order flow—not automatically trigger more trading.
 
-Backtesting, walk-forward analysis, strategy comparison, robustness checks, and quantitative audits help examine hypotheses. Evaluation windows should remain separate from strategy selection and parameter tuning. A passing test or favorable backtest does not establish future profitability.
+## Current branch mapping
 
-### Paper execution
+- src/arash/cli.py: CLI and command orchestration.
+- src/arash/data: market-data validation, snapshots, reconciliation and streaming.py for public WebSocket order-book and trade events.
+- src/arash/research/streaming_features.py: bounded rolling trade-flow and book-context metrics, with no trade-action generation.
+- src/arash/research/return_statistics.py: circular moving-block bootstrap uncertainty intervals for return series.
+- src/arash/research/pbo.py: CSCV-based probability-of-backtest-overfitting diagnostic.
+- src/arash/integrations: public read-only market-data adapters.
+- src/arash/research: backtests, chronological evaluation, robustness and research diagnostics.
+- src/arash/risk: explicit risk inputs, sizing and exposure checks.
+- src/arash/paper: simulated broker, paper order workflow and execution scenarios.
+- src/arash/storage: local SQLite persistence.
+- src/arash/reporting: report and provenance utilities.
 
-The paper broker models simulated order behavior and local portfolio state. Fees, spread, slippage, capacity, partial fills, and other execution assumptions should be explicit wherever supported. Simulated fills are not evidence that a real venue would execute the same way.
+The current branch contains an initial real-time public order-book stream and market-quality observations, alongside research, risk and paper-simulation foundations. A resilient multi-market event runtime, order-book-aware execution, exchange order routing, venue reconciliation and production-grade monitoring remain future implementation milestones. Current public-market connectors are read-only; the branch should not be assumed to submit live orders.
 
-### Risk engine
+## Performance principles
 
-The 28.0.0 change record highlights a correction to incremental position sizing: existing exposure in the same instrument is considered before sizing an additional BUY. The reference archive also contains portfolio exposure, mark-freshness, and stress-analysis components. These are software controls, not guarantees against loss.
-
-### Persistence and reporting
-
-The reference source includes a SQLite-backed local store and machine-readable research or risk outputs. Local ledgers and generated reports may contain sensitive or machine-specific data and should not be published by default.
-
-## Trust boundaries
-
-- **Data boundary:** only declared inputs should be assumed available in an offline run.
-- **Simulation boundary:** simulated orders must never be presented as real exchange activity.
-- **Risk boundary:** risk checks reduce certain classes of operational error but cannot eliminate market risk.
-- **Evidence boundary:** test results apply to the recorded environment and source revision only.
-- **Repository boundary:** source synchronization and clean-checkout verification remain outstanding.
-
-## Release limitations
-
-The 28.0.0 release gate is recorded as `INCOMPLETE`: Ruff was unavailable, and Python 3.12 plus hosted CI were not independently verified. See [Release and Verification Status](RELEASE_STATUS.md).
+Throughput alone is not the objective. ARASH should optimize for correct state transitions, low avoidable latency, bounded resource use, deterministic replay where feasible, explainable rejection reasons, operational recovery, and measured execution quality. Optimize after representative profiling; do not sacrifice risk controls or accounting integrity for a headline latency number.

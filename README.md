@@ -1,94 +1,75 @@
-<div align="center">
+# ARASH — Adaptive Quantitative Trading Intelligence
 
-# ARASH Foundation
+**Research-grade thinking. Execution-aware design. Risk-first automation.**
 
-**Systematic trading research · Offline-first simulation · Explicit risk controls**
+ARASH is an ambitious quantitative-trading platform being engineered to connect market intelligence, rigorous strategy research, portfolio risk, execution modelling, and operational controls in one coherent system. Its goal is not to generate the largest number of signals. Its goal is to make every trading decision explainable, measurable, reproducible, and accountable to real market constraints.
 
-[![Research mode](https://img.shields.io/badge/mode-offline%20research-2457A7?style=for-the-badge)](docs/RISK_AND_SAFETY.md)
-[![Execution boundary](https://img.shields.io/badge/live%20orders-not%20supported-6B7280?style=for-the-badge)](docs/RISK_AND_SAFETY.md)
-[![Reference version](https://img.shields.io/badge/reference-v28.0.0-5B4BDB?style=for-the-badge)](docs/RELEASE_STATUS.md)
+ARASH is designed to grow beyond a collection of indicators or a candle-loop script: market data is validated before it is trusted; hypotheses are evaluated against chronological evidence; transaction costs and liquidity belong in the decision process; risk checks sit between a strategy and any future execution route; and research runs retain provenance for review and reproduction.
 
-*An auditable foundation for market-data validation, quantitative experiments, paper execution, portfolio-risk diagnostics, and reproducible research evidence.*
+## The ARASH engineering standard
 
-</div>
+- **Market-aware intelligence:** market-data quality, regime context, volatility and liquidity diagnostics inform research instead of treating every candle as equally reliable.
+- **Research discipline:** chronological evaluation, explicit benchmarks, parameter-family accounting, robustness scenarios and reproducible run manifests are first-class concerns.
+- **Execution realism:** fees, spreads, slippage, latency, partial fills and market impact are design requirements—not afterthoughts hidden behind a headline return.
+- **Risk before routing:** position sizing, exposure limits, drawdown controls, order validation, stale-data protection and independent stop mechanisms belong in the control path.
+- **One auditable lifecycle:** data provenance, strategy configuration, risk decisions, simulated fills, accounting and reports should be traceable end to end.
+- **Extensible by design:** the architecture is intended to support multiple strategies, assets, venues and model families without coupling signal generation to order handling.
 
----
+## What the current source branch contains
 
-> **Repository status:** The public repository is being prepared using the supplied **ARASH Foundation 28.0.0** archive as the reference snapshot. The source archive has been reviewed for obvious credential patterns and sensitive filenames, but its source tree has **not yet been synchronized into this GitHub repository**. Therefore, this repository is currently documentation-only and is not yet installable or runnable from GitHub.
+| Capability | Current source area |
+| --- | --- |
+| Market-data validation, public candles and live order-book streaming | src/arash/data and src/arash/integrations |
+| Live order-book and trade streams with rolling flow features | src/arash/data/streaming.py and src/arash/research/streaming_features.py |
+| Microprice, spread, displayed depth imbalance, reported-side trade notional imbalance and rolling VWAP | Live microstructure feature engine |
+| Baseline backtests and chronological holdout evaluation | src/arash/research |
+| Robustness, candidate-family, CSCV/PBO and block-bootstrap uncertainty diagnostics | src/arash/research |
+| Market-regime and descriptive market-intelligence reports | CLI and research modules |
+| Explicit position sizing and risk diagnostics | src/arash/risk |
+| Persistent paper-account records and safety controls | src/arash/paper and src/arash/storage |
+| Execution-cost scenarios, stress cases and research manifests | paper, research and reporting modules |
 
-## What is ARASH?
+Historical replay and local research are controlled modes within the engineering toolkit; they are not the definition or long-term ambition of ARASH. Online market-data ingestion is now represented by a public order-book and trade stream with REST bootstrap, bounded reconnects and descriptive rolling microstructure measurements. Execution-aware decisioning and a carefully controlled path from research to paper operation remain central architectural objectives. Production order routing and the complete real-time operational stack remain development milestones, not features to assume are already available in this branch.
 
-ARASH is an offline-first software foundation for systematic trading research. Its goal is to make experiments inspectable and repeatable while keeping data quality, transaction costs, risk assumptions, and missing evidence visible.
+## Quick start
 
-The project does not promise returns. It aims to help developers evaluate trading hypotheses without confusing a backtest, a paper fill, or a passing software test with proof of a profitable strategy.
+Requires Python 3.12 or newer.
 
-## Capabilities in the 28.0.0 reference archive
+    python -m venv .venv
+    source .venv/bin/activate
+    python -m pip install .
+    python -m arash --help
 
-- **Market-data ingestion and quality:** local candle-file loading, structural checks, data-health diagnostics, and market-data workflows.
-- **Historical research:** offline backtesting, walk-forward evaluation, strategy comparison, robustness analysis, and quantitative audits where supported.
-- **Paper execution:** local simulated order handling, execution-friction assumptions, order lifecycle tests, and simulated portfolio state.
-- **Risk engine:** position sizing, portfolio exposure controls, valuation-mark freshness checks, portfolio stress diagnostics, and risk-related CLI workflows.
-- **Research persistence and reporting:** SQLite-backed local storage, machine-readable outputs, and reproducible diagnostic records.
-- **Safety boundaries:** the reference snapshot is designed for research and paper simulation; its release evidence records that no live orders were submitted.
+Windows PowerShell activation:
 
-These are capabilities documented by the 28.0.0 source archive. They have **not yet been verified by running code from this GitHub checkout**, because the source files are not present here yet.
+    .\.venv\Scripts\Activate.ps1
 
-## Research workflow
+Useful starting commands:
 
-```mermaid
-flowchart TD
-    A[Local market data] --> B[Validate and audit inputs]
-    B --> C[Backtest and walk-forward research]
-    C --> D[Robustness and execution-cost analysis]
-    D --> E[Paper execution and risk checks]
-    E --> F[Reports and local research ledger]
-    F --> G[Human review of assumptions and limitations]
-```
+    python -m arash csv-validate sample_data/research_demo_320.csv
+    python -m arash backtest sample_data/research_demo_320.csv --strategy buy-hold
+    python -m arash market-intelligence sample_data/research_demo_320.csv
+    python -m arash return-stats sample_data/return_stats_demo.json --iterations 2000 --block-length 5
 
-## Risk and research integrity
+For a live read-only public market stream (requires the optional WebSocket dependency):
 
-1. Keep evaluation data chronologically separate from strategy selection and tuning.
-2. Declare the dataset, configuration, benchmark, and transaction-cost assumptions.
-3. Treat simulated orders and fills as simulated—not as exchange activity.
-4. Keep missing or unavailable checks marked as incomplete.
-5. Do not infer profitability from backtests, test counts, or software quality gates.
-6. Never commit API credentials, personal account data, local ledgers, or private datasets.
+    python -m pip install ".[marketstream]"
+    python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
-Read the [Architecture](docs/ARCHITECTURE.md), [Research Protocol](docs/RESEARCH_PROTOCOL.md), and [Risk and Safety Policy](docs/RISK_AND_SAFETY.md).
+The streaming command subscribes to Nobitex's public order-book and public-trades channels over one WebSocket connection and bootstraps the initial book from the public REST snapshot. Each event is enriched with bounded rolling trade-flow features. It reports market observations only and does not submit orders.
 
-## Verification reported for version 28.0.0
+Browse the [CLI reference](docs/CLI_REFERENCE.md), [architecture](docs/ARCHITECTURE.md), [live market microstructure guide](docs/MARKET_MICROSTRUCTURE.md), [research protocol](docs/RESEARCH_PROTOCOL.md), [research foundations](docs/RESEARCH_FOUNDATIONS.md), and [risk-control principles](docs/RISK_AND_SAFETY.md).
 
-The archive's recorded release gate reports:
+## The next-generation target
 
-| Check | Recorded result |
-|---|---|
-| Automated tests | 301 passed across 10 pytest groups |
-| Smoke checks | 11/11 passed |
-| Python compilation | Passed |
-| Wheel build and isolated install/import | Passed |
-| Ruff lint | Unavailable; not counted as a pass |
-| Python 3.12 and hosted CI | Not independently verified |
-| Overall release gate | **INCOMPLETE** — 24 passed, 0 failed, 1 incomplete |
+ARASH is being developed toward a cohesive research-to-execution architecture with event-driven market updates; point-in-time and multi-venue data; order-book and liquidity context where available; explicit alpha/model interfaces; portfolio-aware position targets; independent pre-trade risk approval; realistic exchange-specific execution models; durable order/fill/position accounting; live health and drift monitoring; and auditable emergency-stop controls.
 
-These are archive-reported results dated 2026-10-16, not CI results for this GitHub repository. The full details and limitations are in [Release and Verification Status](docs/RELEASE_STATUS.md).
+These are engineering objectives, not a claim that every capability is already implemented. The roadmap prioritizes evidence quality and operating discipline alongside predictive sophistication: a complex model that cannot survive realistic costs, leakage controls and changing market regimes is not a strong trading system.
 
-## Documentation
+## Development status
 
-- [Architecture and component boundaries](docs/ARCHITECTURE.md)
-- [Research and validation protocol](docs/RESEARCH_PROTOCOL.md)
-- [Risk controls and safety boundary](docs/RISK_AND_SAFETY.md)
-- [Release and verification status](docs/RELEASE_STATUS.md)
-- [Roadmap](ROADMAP.md)
-- [Changelog](CHANGELOG.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Security reporting](SECURITY.md)
+ARASH is under active development. The current source-sync branch may contain defects, incomplete integrations or behavior that changes as implementation proceeds. The repository does not claim a verified production release or demonstrate profitable future performance. Do not connect it to real-money execution on the assumption that this branch is production-ready.
 
-## Source publication status
+## License
 
-The next repository milestone is to synchronize the reviewed source, tests, packaging metadata, configuration examples, sample data, and CI workflow from the 28.0.0 archive. After synchronization, the complete release gate must be rerun from a clean checkout before installation or release readiness is claimed.
-
-## Disclaimer
-
-ARASH is a software and quantitative-research project, not financial advice. Backtests and paper simulations are sensitive to input quality, assumptions, model selection, and execution costs. They do not guarantee future results.
-
-**Current boundary: offline research and paper simulation only. No live-order execution is claimed or authorized by this repository.**
+An explicit license for external reuse or redistribution has not yet been selected.
