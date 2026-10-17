@@ -1,4 +1,4 @@
-name: Source synchronization sanity check
+name: ARASH validation
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  package-smoke:
-    name: Python ${{ matrix.python-version }} — package and CLI smoke check
+  quality:
+    name: Python ${{ matrix.python-version }} — tests and integration checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -25,9 +25,32 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install package
-        run: python -m pip install .
-      - name: Compile the staged source tree
-        run: python -m compileall -q src
+      - name: Install project and development dependencies
+        run: python -m pip install -e ".[dev,marketstream]"
+      - name: Compile source and tests
+        run: python -m compileall -q src tests
+      - name: Run checked-in regression tests
+        run: python -m pytest -q tests
       - name: Verify CLI entry point
         run: python -m arash --help
+      - name: Run synthetic PBO diagnostic
+        run: python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output "$RUNNER_TEMP/arash-pbo.json"
+      - name: Run synthetic return-uncertainty diagnostic
+        run: python -m arash return-stats sample_data/return_stats_demo.json --iterations 250 --block-length 5 --seed 17 --output "$RUNNER_TEMP/arash-return-stats.json"
+      - name: Assert diagnostic output boundaries
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          pbo = json.loads((root / "arash-pbo.json").read_text(encoding="utf-8"))
+          returns = json.loads((root / "arash-return-stats.json").read_text(encoding="utf-8"))
+          assert pbo["status"] == "COMPLETED_DIAGNOSTIC"
+          assert pbo["trade_action"] == "NONE" and pbo["execution_enabled"] is False
+          assert returns["status"] == "COMPLETED_DIAGNOSTIC"
+          assert returns["trade_action"] == "NONE" and returns["execution_enabled"] is False
+          assert len(returns["input_sha256"]) == 64
+          print("Diagnostic integration checks passed; no trading action is generated.")
+          PY
