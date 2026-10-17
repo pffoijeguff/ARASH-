@@ -199,6 +199,69 @@ def _parse_levels(raw: object, *, side: str) -> tuple[BookLevel, ...]:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class PublicTrade:
+    symbol: str
+    exchange_timestamp: datetime
+    received_at: datetime
+    side: str
+    price: Decimal
+    volume: Decimal
+    source: str = "nobitex-public-websocket"
+    update_offset: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "symbol", _valid_symbol(self.symbol))
+        for field_name in ("exchange_timestamp", "received_at"):
+            value = getattr(self, field_name)
+            if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must be a timezone-aware datetime")
+            object.__setattr__(self, field_name, value.astimezone(timezone.utc))
+        side = self.side.strip().lower() if isinstance(self.side, str) else ""
+        if side not in {"buy", "sell"}:
+            raise ValueError("trade side must be 'buy' or 'sell'")
+        object.__setattr__(self, "side", side)
+        object.__setattr__(self, "price", _positive_decimal(self.price, "price"))
+        object.__setattr__(self, "volume", _positive_decimal(self.volume, "volume"))
+        if self.update_offset is not None and (
+            type(self.update_offset) is not int or self.update_offset < 0
+        ):
+            raise ValueError("update_offset must be a non-negative integer or None")
+        if self.exchange_timestamp > self.received_at + timedelta(seconds=5):
+            raise ValueError("exchange timestamp is implausibly far in the future")
+
+    @property
+    def quote_notional(self) -> Decimal:
+        return self.price * self.volume
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "event_type": "public_trade",
+            "source": self.source,
+            "symbol": self.symbol,
+            "exchange_timestamp": self.exchange_timestamp.isoformat(),
+            "received_at": self.received_at.isoformat(),
+            "feed_lag_ms": max(
+                0,
+                int((self.received_at - self.exchange_timestamp).total_seconds() * 1000),
+            ),
+            "clock_skew_ms": int(
+                (self.exchange_timestamp - self.received_at).total_seconds() * 1000
+            ),
+            "update_offset": self.update_offset,
+            "reported_side": self.side,
+            "price": str(self.price),
+            "volume": str(self.volume),
+            "quote_notional": str(self.quote_notional),
+            "interpretation": (
+                "Reported exchange trade side; not a standalone directional signal."
+            ),
+            "read_only": True,
+            "orders_submitted": False,
+        }
+
+
 def _unpack_message(raw_message: str | bytes, expected_channel: str) -> tuple[dict[str, Any] | None, int | None]:
     if isinstance(raw_message, bytes):
         if len(raw_message) > MAX_MESSAGE_BYTES:
@@ -311,6 +374,46 @@ def parse_public_orderbook_message(
     )
 
 
+def parse_public_trade_message(
+    symbol: str,
+    raw_message: str | bytes,
+    *,
+    received_at: datetime | None = None,
+) -> PublicTrade | None:
+    """Parse the public market trade channel; private account trade channels are never used."""
+    normalized_symbol = _valid_symbol(symbol)
+    channel = f"public:trades-{normalized_symbol}"
+    data, offset = _unpack_message(raw_message, channel)
+    if data is None:
+        return None
+    raw_timestamp = data.get("time")
+    if isinstance(raw_timestamp, bool) or not isinstance(raw_timestamp, (int, str)):
+        raise PublicMarketStreamError("trade time must be a Unix timestamp in milliseconds")
+    try:
+        timestamp_ms = int(raw_timestamp)
+        exchange_timestamp = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError) as exc:
+        raise PublicMarketStreamError("trade time is not a valid Unix timestamp") from exc
+    if timestamp_ms <= 0:
+        raise PublicMarketStreamError("trade time must be a positive Unix timestamp")
+    side = data.get("type")
+    if side not in {"buy", "sell"}:
+        raise PublicMarketStreamError("trade type must be 'buy' or 'sell'")
+    try:
+        trade = PublicTrade(
+            symbol=normalized_symbol,
+            exchange_timestamp=exchange_timestamp,
+            received_at=received_at or datetime.now(timezone.utc),
+            side=side,
+            price=_positive_decimal(data.get("price"), "price"),
+            volume=_positive_decimal(data.get("volume"), "volume"),
+            update_offset=offset,
+        )
+    except ValueError as exc:
+        raise PublicMarketStreamError(f"Invalid public trade publication: {exc}") from exc
+    return trade
+
+
 def fetch_initial_public_orderbook(
     symbol: str,
     *,
@@ -380,10 +483,10 @@ def fetch_initial_public_orderbook(
 
 
 async def _deliver(
-    callback: Callable[[OrderBookSnapshot], object],
-    snapshot: OrderBookSnapshot,
+    callback: Callable[[Any], object],
+    event: OrderBookSnapshot | PublicTrade,
 ) -> None:
-    result = callback(snapshot)
+    result = callback(event)
     if inspect.isawaitable(result):
         await result  # type: ignore[misc]
 
@@ -393,10 +496,10 @@ async def _wait_for_ack(
     *,
     request_id: int,
     symbol: str,
-    callback: Callable[[OrderBookSnapshot], object],
+    callback: Callable[[Any], object],
     stop_event: asyncio.Event | None,
+    trade_callback: Callable[[Any], object] | None = None,
 ) -> None:
-    channel = f"public:orderbook-{symbol}"
     async with asyncio.timeout(10):
         while stop_event is None or not stop_event.is_set():
             raw_message = await websocket.recv()
@@ -416,20 +519,26 @@ async def _wait_for_ack(
             snapshot = parse_public_orderbook_message(symbol, raw_message)
             if snapshot is not None:
                 await _deliver(callback, snapshot)
+                continue
+            trade = parse_public_trade_message(symbol, raw_message)
+            if trade is not None and trade_callback is not None:
+                await _deliver(trade_callback, trade)
         return
 
 
 async def stream_public_orderbook(
     symbol: str,
-    on_snapshot: Callable[[OrderBookSnapshot], object],
+    on_snapshot: Callable[[Any], object],
     *,
+    on_trade: Callable[[Any], object] | None = None,
     stop_event: asyncio.Event | None = None,
     max_reconnects: int = 5,
 ) -> None:
-    """Stream full public order-book snapshots, reconnecting under a bounded backoff.
+    """Stream public order-book snapshots and optionally public trade prints.
 
-    The optional websockets dependency is loaded lazily. Only the unauthenticated public
-    market-data channel is used; no private channels or trading endpoints are exposed.
+    Order-book and public-trades channels share one WebSocket connection. The optional
+    websockets dependency is loaded lazily. No private account channels or order endpoints
+    are used.
     """
     normalized_symbol = _valid_symbol(symbol)
     if type(max_reconnects) is not int or not 0 <= max_reconnects <= 20:
@@ -443,6 +552,7 @@ async def stream_public_orderbook(
         ) from exc
 
     channel = f"public:orderbook-{normalized_symbol}"
+    trade_channel = f"public:trades-{normalized_symbol}"
     reconnects = 0
     last_snapshot_at: datetime | None = None
     while stop_event is None or not stop_event.is_set():
@@ -461,6 +571,7 @@ async def stream_public_orderbook(
                     request_id=1,
                     symbol=normalized_symbol,
                     callback=on_snapshot,
+                    trade_callback=on_trade,
                     stop_event=stop_event,
                 )
                 if stop_event is not None and stop_event.is_set():
@@ -482,10 +593,26 @@ async def stream_public_orderbook(
                     request_id=2,
                     symbol=normalized_symbol,
                     callback=deliver_monotonic,
+                    trade_callback=on_trade,
                     stop_event=stop_event,
                 )
                 if stop_event is not None and stop_event.is_set():
                     return
+
+                if on_trade is not None:
+                    await websocket.send(
+                        json.dumps({"id": 3, "subscribe": {"channel": trade_channel}})
+                    )
+                    await _wait_for_ack(
+                        websocket,
+                        request_id=3,
+                        symbol=normalized_symbol,
+                        callback=deliver_monotonic,
+                        trade_callback=on_trade,
+                        stop_event=stop_event,
+                    )
+                    if stop_event is not None and stop_event.is_set():
+                        return
 
                 initial_snapshot = await asyncio.to_thread(
                     fetch_initial_public_orderbook,
@@ -515,6 +642,11 @@ async def stream_public_orderbook(
                     snapshot = parse_public_orderbook_message(normalized_symbol, raw_message)
                     if snapshot is not None:
                         await deliver_monotonic(snapshot)
+                        reconnects = 0
+                        continue
+                    trade = parse_public_trade_message(normalized_symbol, raw_message)
+                    if trade is not None and on_trade is not None:
+                        await _deliver(on_trade, trade)
                         reconnects = 0
         except asyncio.CancelledError:
             raise
