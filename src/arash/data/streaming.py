@@ -526,7 +526,7 @@ async def _wait_for_ack(
         return
 
 
-async def stream_public_orderbook(
+async def stream_public_market_data(
     symbol: str,
     on_snapshot: Callable[[Any], object],
     *,
@@ -534,11 +534,10 @@ async def stream_public_orderbook(
     stop_event: asyncio.Event | None = None,
     max_reconnects: int = 5,
 ) -> None:
-    """Stream public order-book snapshots and optionally public trade prints.
+    """Stream public order-book snapshots and public trade prints on one connection.
 
-    Order-book and public-trades channels share one WebSocket connection. The optional
-    websockets dependency is loaded lazily. No private account channels or order endpoints
-    are used.
+    The optional websockets dependency is loaded lazily. No private account channels or
+    order endpoints are used.
     """
     normalized_symbol = _valid_symbol(symbol)
     if type(max_reconnects) is not int or not 0 <= max_reconnects <= 20:
