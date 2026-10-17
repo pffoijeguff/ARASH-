@@ -4,11 +4,12 @@
 
 ARASH is being developed as a research-driven quantitative trading platform centered on adaptive market analysis, rigorous validation, execution realism, portfolio-aware risk and end-to-end auditability. The goal is a coherent path from market data and hypothesis research to paper operation and, only after appropriate engineering and verification, controlled production execution.
 
-The current branch already contains core source areas for data quality and public candle ingestion, backtesting and evaluation, robustness diagnostics, market reports, risk sizing, paper-account bookkeeping, execution scenarios and report provenance.
+The current branch contains market-data quality and public candle ingestion, an initial public WebSocket order-book stream with REST bootstrap, top-of-book/microprice/spread/depth observations, backtesting and evaluation, robustness diagnostics, risk sizing, paper-account bookkeeping, execution scenarios and report provenance.
 
 ## Current implementation boundary
 
-- Public market-data adapters are read-only.
+- Public market-data adapters are read-only; the initial live WebSocket path publishes descriptive order-book snapshots only.
+- Production exchange order routing, user-account channels and venue-side order/fill reconciliation are not implemented in this branch.
 - Historical replay and paper execution are supported as research/simulation modes.
 - Production exchange order routing, venue-side reconciliation and the complete real-time operating stack remain development milestones.
 - Some components were reconstructed or normalized during synchronization and have not been proven byte-for-byte or behavior-for-behavior identical to the reference archive.
