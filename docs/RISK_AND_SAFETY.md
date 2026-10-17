@@ -1,25 +1,38 @@
-# Risk and Safety Boundaries
+# ARASH Risk and Operational Controls
 
-ARASH Foundation 28.0.0 is intended for research and paper simulation only. It is not financial advice and cannot guarantee capital preservation or trading profitability.
+ARASH is being designed with a risk-first control plane. Signal quality cannot compensate for uncontrolled order flow, stale data, incorrect accounting or unrealistic execution assumptions.
 
-## Execution boundary
+## Current branch boundary
 
-- The project does not support live order submission.
-- Public market-data adapters are read-only and opt-in.
-- A paper fill is a model output, not confirmation of an exchange fill.
-- A simulated stop price is not guaranteed to be a real fill price; gaps and slippage can exceed an assumed risk budget.
+The current source branch provides risk diagnostics, position sizing and a simulated paper-account workflow. Public market-data access is read-only. A simulated fill is not evidence of an exchange fill, and the current branch should not be assumed to submit live orders.
 
-## Risk controls
+## Target pre-trade controls
 
-- Risk sizing depends on caller-supplied inputs and the declared policy.
-- Existing exposure in the same instrument must be accounted for before sizing an additional position.
-- Portfolio exposure, daily loss, drawdown, and instrument caps are diagnostic controls, not guarantees.
-- Stale or incorrect marks, baselines, and cost assumptions can invalidate a risk estimate.
+- Instrument permission and order-type validation.
+- Maximum order notional, position size, gross/net exposure and concentration checks.
+- Price collars, quantity/precision validation and order-rate throttles.
+- Explicit fee, spread, slippage and minimum-notional assumptions.
+- Stale-market-data and excessive-feed-lag rejection.
+- Daily loss, drawdown and instrument-level circuit breakers.
+- Persistent global and per-strategy kill switches that fail closed.
+- Idempotent client order identifiers and prevention of duplicate submission.
+- Clear reject reasons, durable audit records and post-restart reconciliation.
 
-## Research limitations
+## Operational failure modes to design for
 
-- Historical results and synthetic fixtures do not establish future performance.
-- Walk-forward, prefix-invariance, bootstrap, sign-flip, and multiple-testing checks depend on assumptions and available sample size.
-- Data hashes support byte-level integrity checks but do not prove provider authenticity or data correctness.
-- Cross-source agreement does not establish that either source is accurate.
-- A reproducible report establishes what was run under declared inputs; it does not prove that the chosen model is economically useful.
+- Exchange disconnects, API timeouts, rate limits and partial responses.
+- Out-of-order, duplicated, stale or missing market events.
+- Partial fills, rejected orders and ambiguous submission acknowledgements.
+- Differences between internal and venue balances, positions or open orders.
+- Unexpected fees, market impact, funding/borrow costs and liquidity gaps.
+- A strategy, data feed or model becoming unstable after a regime change.
+
+When internal and external state disagree, the system should stop increasing risk until it has reconciled the discrepancy. Restart behavior, retry policy and stop-state persistence must be explicit.
+
+## Research and execution interpretation
+
+Historical simulation, paper trading and stress tests establish behavior only under their declared data and assumptions. They cannot guarantee capital preservation or future returns. Risk outputs are only as sound as their marks, exposures, currency units, timing, fees and policy inputs.
+
+## Development status
+
+Controls and adapters are being developed iteratively. The current branch may contain defects or incomplete integrations; it is not a verified production release.
