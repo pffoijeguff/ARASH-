@@ -15,7 +15,7 @@ The current development branch contains market-data quality and public candle in
 
 ## Verification status
 
-The latest focused branch CI run at commit `7542e84c01da4758e425234da5ab2a0247150212` passed on Python 3.12 and 3.13. Each job installed the package and development extras, compiled source and tests, ran the checked-in regression tests, checked `python -m arash --help`, ran both synthetic research-diagnostic commands, and checked that their output makes no trading action.
+The latest focused branch CI run at code commit `24162f1e7bb3379f015f7a7b60501aac8ee61c3e` passed on Python 3.12 and 3.13. Each job installed the package and development extras, compiled source and tests, ran the checked-in regression tests, checked `python -m arash --help`, ran both synthetic research-diagnostic commands, and checked that their output makes no trading action.
 
 The checked-in branch currently has 17 regression cases covering PBO/return-statistics validation and public stream parsing/rolling-feature integration. This is a focused verification layer, not the full release gate. A passing CI smoke job does not establish correctness of every module or live provider compatibility. Full lint/security/release-gate checks and live WebSocket verification have not been completed.
 
