@@ -326,6 +326,214 @@ class SQLiteStore:
             rows = conn.execute("SELECT * FROM research_runs ORDER BY recorded_at DESC LIMIT ?", (limit,)).fetchall()
         return [dict(row) for row in rows]
 
+    def persist_market_snapshot(
+        self,
+        *,
+        source: str,
+        symbol: str,
+        interval: str,
+        candles: list[Candle],
+        source_digest_sha256: str,
+        requested_to: datetime,
+        requested_from: datetime | None = None,
+        captured_at: datetime | None = None,
+    ) -> dict[str, object]:
+        """Persist an immutable market-data snapshot and update the latest candle view.
+
+        Historical versions are retained in market_data_snapshot_candles. The shared
+        candles table is a convenience latest-value view and may be updated when a provider
+        revises an earlier candle. Snapshot and lineage metadata are written transactionally.
+        """
+        from arash.data.snapshots import (
+            AVAILABILITY_POLICY,
+            canonical_candle_records,
+            normalized_candle_sha256,
+            snapshot_manifest_digest,
+        )
+
+        source = source.strip()
+        symbol = symbol.strip().upper()
+        interval = interval.strip().lower()
+        if not source or not symbol or not interval:
+            raise ValueError("source, symbol and interval must be non-empty")
+        if not candles:
+            raise ValueError("cannot persist an empty market snapshot")
+        items = validate_candle_series(candles)
+        if any(c.symbol != symbol or c.interval.lower() != interval for c in items):
+            raise ValueError("snapshot candles must match the requested symbol and interval")
+        captured = _aware_iso(captured_at or _utc_now(), "captured_at")
+        to_iso = _aware_iso(requested_to, "requested_to")
+        from_iso = _aware_iso(requested_from, "requested_from") if requested_from else None
+        if from_iso and from_iso >= to_iso:
+            raise ValueError("requested_from must be earlier than requested_to")
+        source_digest = _sha256(source_digest_sha256, "source_digest_sha256")
+        normalized_digest = normalized_candle_sha256(items)
+        canonical_records = canonical_candle_records(items)
+        first_time = items[0].timestamp.isoformat()
+        last_time = items[-1].timestamp.isoformat()
+        snapshot_id = str(uuid.uuid4())
+        captured_dt = datetime.fromisoformat(captured)
+        self.ensure_schema()
+
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            previous_snapshot = conn.execute(
+                """SELECT snapshot_id FROM market_data_snapshots
+                   WHERE source=? AND symbol=? AND interval=?
+                   ORDER BY captured_at DESC, snapshot_id DESC LIMIT 1""",
+                (source, symbol, interval),
+            ).fetchone()
+            parent_id = str(previous_snapshot["snapshot_id"]) if previous_snapshot else None
+
+            keys = [(c.symbol, c.interval, c.timestamp.isoformat()) for c in items]
+            existing_by_key: dict[tuple[str, str, str], sqlite3.Row] = {}
+            for item in items:
+                row = conn.execute(
+                    "SELECT open,high,low,close,volume FROM candles WHERE symbol=? AND interval=? AND timestamp=?",
+                    (item.symbol, item.interval, item.timestamp.isoformat()),
+                ).fetchone()
+                if row is not None:
+                    existing_by_key[(item.symbol, item.interval, item.timestamp.isoformat())] = row
+
+            new_count = revised_count = unchanged_count = 0
+            for candle in items:
+                key = (candle.symbol, candle.interval, candle.timestamp.isoformat())
+                old = existing_by_key.get(key)
+                values = (str(candle.open), str(candle.high), str(candle.low), str(candle.close), str(candle.volume))
+                if old is None:
+                    new_count += 1
+                elif tuple(old[field] for field in ("open", "high", "low", "close", "volume")) == values:
+                    unchanged_count += 1
+                else:
+                    revised_count += 1
+
+            # Batch identity is scoped to provider and source payload so identical data can
+            # be safely re-observed without colliding across different provider namespaces.
+            batch_digest = hashlib.sha256((source + "\n" + source_digest).encode("utf-8")).hexdigest()
+            batch = conn.execute(
+                "SELECT batch_id FROM candle_import_batches WHERE source_sha256=?",
+                (batch_digest,),
+            ).fetchone()
+            if batch is None:
+                batch_id = str(uuid.uuid4())
+                conn.execute(
+                    "INSERT INTO candle_import_batches VALUES(?,?,?,?,?)",
+                    (batch_id, source, batch_digest, len(items), captured),
+                )
+            else:
+                batch_id = str(batch["batch_id"])
+
+            manifest: dict[str, object] = {
+                "snapshot_id": snapshot_id,
+                "source": source,
+                "symbol": symbol,
+                "interval": interval,
+                "snapshot_type": "bounded_history_fetch",
+                "captured_at": captured,
+                "requested_from": from_iso,
+                "requested_to": to_iso,
+                "event_time_min": first_time,
+                "event_time_max": last_time,
+                "source_digest_sha256": source_digest,
+                "source_digest_kind": "normalized_provider_candles_json_sha256",
+                "normalized_data_sha256": normalized_digest,
+                "row_count": len(items),
+                "availability_policy": AVAILABILITY_POLICY,
+                "parent_snapshot_id": parent_id,
+                "new_observation_count": new_count,
+                "revised_observation_count": revised_count,
+                "unchanged_observation_count": unchanged_count,
+                "recorded_at": captured,
+            }
+            manifest_digest = snapshot_manifest_digest(manifest)
+            conn.execute(
+                """INSERT INTO market_data_snapshots
+                   (snapshot_id,source,symbol,interval,captured_at,source_digest_sha256,
+                    normalized_data_sha256,row_count,manifest_json,snapshot_manifest_sha256)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (snapshot_id, source, symbol, interval, captured, source_digest,
+                 normalized_digest, len(items), json.dumps(manifest, sort_keys=True, separators=(",", ":")),
+                 manifest_digest),
+            )
+            conn.executemany(
+                """INSERT INTO market_data_snapshot_candles
+                   (snapshot_id,symbol,interval,event_timestamp,open,high,low,close,volume)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                [
+                    (snapshot_id, candle.symbol, candle.interval, candle.timestamp.isoformat(),
+                     str(candle.open), str(candle.high), str(candle.low), str(candle.close), str(candle.volume))
+                    for candle in items
+                ],
+            )
+            conn.executemany(
+                """INSERT INTO candles(symbol,interval,timestamp,open,high,low,close,volume,batch_id)
+                   VALUES(?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(symbol,interval,timestamp) DO UPDATE SET
+                     open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,
+                     volume=excluded.volume,batch_id=excluded.batch_id""",
+                [
+                    (candle.symbol, candle.interval, candle.timestamp.isoformat(),
+                     str(candle.open), str(candle.high), str(candle.low), str(candle.close),
+                     str(candle.volume), batch_id)
+                    for candle in items
+                ],
+            )
+
+            prior_state = conn.execute(
+                "SELECT sync_count FROM market_sync_state WHERE source=? AND symbol=? AND interval=?",
+                (source, symbol, interval),
+            ).fetchone()
+            sync_count = (int(prior_state["sync_count"]) + 1) if prior_state else 1
+            conn.execute(
+                """INSERT INTO market_sync_state
+                   (source,symbol,interval,last_attempt_at,last_success_at,latest_timestamp,
+                    last_payload_sha256,consecutive_errors,last_status,last_error,sync_count,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(source,symbol,interval) DO UPDATE SET
+                     last_attempt_at=excluded.last_attempt_at,
+                     last_success_at=excluded.last_success_at,
+                     latest_timestamp=excluded.latest_timestamp,
+                     last_payload_sha256=excluded.last_payload_sha256,
+                     consecutive_errors=0,last_status='ok',last_error=NULL,
+                     sync_count=excluded.sync_count,updated_at=excluded.updated_at""",
+                (source, symbol, interval, captured, captured, last_time, source_digest,
+                 0, "ok", None, sync_count, captured),
+            )
+            fetch_id = str(uuid.uuid4())
+            conn.execute(
+                """INSERT INTO market_data_fetches
+                   (fetch_id,batch_id,source,symbol,interval,fetched_at,requested_from,requested_to,
+                    received_count,inserted_count,updated_count,unchanged_count,payload_sha256,status,detail)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (fetch_id, batch_id, source, symbol, interval, captured, from_iso, to_iso,
+                 len(items), new_count, revised_count, unchanged_count, source_digest, "ok",
+                 f"snapshot_id={snapshot_id}; manifest_sha256={manifest_digest}"),
+            )
+            conn.execute(
+                "INSERT INTO system_events(event_type,detail,recorded_at) VALUES(?,?,?)",
+                ("market_snapshot_persisted", json.dumps({
+                    "snapshot_id": snapshot_id, "manifest_sha256": manifest_digest,
+                    "source": source, "symbol": symbol, "interval": interval,
+                    "row_count": len(items), "new": new_count, "revised": revised_count,
+                    "unchanged": unchanged_count,
+                }, sort_keys=True), captured),
+            )
+
+        return {
+            "snapshot_id": snapshot_id,
+            "snapshot_manifest_sha256": manifest_digest,
+            "source": source, "symbol": symbol, "interval": interval,
+            "captured_at": captured, "requested_from": from_iso, "requested_to": to_iso,
+            "row_count": len(items), "new_observation_count": new_count,
+            "revised_observation_count": revised_count,
+            "unchanged_observation_count": unchanged_count,
+            "normalized_data_sha256": normalized_digest,
+            "source_digest_sha256": source_digest,
+            "parent_snapshot_id": parent_id,
+            "fetch_id": fetch_id,
+            "trade_action": "NONE",
+        }
+
     def inspect_ledger_integrity(self) -> dict[str, object]:
         self.ensure_schema()
         with self._connect() as conn:

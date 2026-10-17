@@ -14,6 +14,8 @@ from arash import __version__
 from arash.data.csv_loader import load_candles_csv
 from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
+from arash.data.reconcile import reconcile_market_data
+from arash.storage.sqlite_store import SQLiteStore
 from arash.paper.execution import ExecutionPolicy, simulate_execution
 from arash.paper.execution_batch import simulate_execution_batch
 from arash.paper.execution_stress import run_execution_stress_suite
@@ -104,6 +106,20 @@ def build_parser() -> argparse.ArgumentParser:
     market.add_argument("--to", type=_aware_timestamp, help="Upper bound as ISO-8601; defaults to current UTC")
     market.add_argument("--timeout-seconds", type=float, default=8.0)
     market.add_argument("--output")
+
+    sync_market = commands.add_parser("market-sync", help="Fetch public OHLCV candles and persist a provenance snapshot locally")
+    sync_market.add_argument("--db", required=True)
+    sync_market.add_argument("--provider", default="nobitex-public-udf", choices=["nobitex-public-udf"])
+    sync_market.add_argument("--symbol", required=True)
+    sync_market.add_argument("--interval", required=True)
+    sync_market.add_argument("--count", type=int, default=100)
+    sync_market.add_argument("--to", type=_aware_timestamp, help="Upper bound as ISO-8601; defaults to current UTC")
+    sync_market.add_argument("--timeout-seconds", type=float, default=8.0)
+    sync_market.add_argument("--output")
+
+    reconcile = commands.add_parser("market-reconcile", help="Reconcile local candle lineage and market snapshot metadata")
+    reconcile.add_argument("--db", required=True)
+    reconcile.add_argument("--output")
 
     risk = commands.add_parser("risk-check", help="Calculate a hypothetical long-only position size")
     risk.add_argument("--equity", required=True, type=_decimal)
@@ -349,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(report, args.output)
             return 0
 
-        if args.command == "market-fetch":
+        if args.command in {"market-fetch", "market-sync"}:
             requested_to = args.to or datetime.now(timezone.utc)
             registry = default_connector_registry()
             connector = registry.resolve(args.provider)
@@ -361,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
                 requested_to=requested_to,
             ))
             report = {
-                "mode": "read_only_public_market_data",
+                "mode": "read_only_public_market_data" if args.command == "market-fetch" else "read_only_market_fetch_with_local_snapshot",
                 "live_orders_submitted": False,
                 "source": result.source,
                 "symbol": result.symbol,
@@ -383,8 +399,38 @@ def main(argv: list[str] | None = None) -> int:
                 ],
                 "note": "Public market-data retrieval only; no account credentials or order endpoints are used.",
             }
+            if args.command == "market-sync":
+                store = SQLiteStore(args.db)
+                if result.candles:
+                    persistence = store.persist_market_snapshot(
+                        source=result.source,
+                        symbol=result.symbol,
+                        interval=result.interval,
+                        candles=result.candles,
+                        source_digest_sha256=result.payload_sha256,
+                        requested_to=result.requested_to,
+                        captured_at=result.fetched_at,
+                    )
+                    report["persistence"] = persistence
+                else:
+                    fetch_id = store.record_market_fetch(
+                        source=result.source,
+                        symbol=result.symbol,
+                        interval=result.interval,
+                        requested_to=result.requested_to,
+                        status="no_data",
+                        payload_sha256=result.payload_sha256,
+                        received_count=0,
+                        detail="The public provider returned no candles for the requested window.",
+                    )
+                    report["persistence"] = {"fetch_id": fetch_id, "status": "no_data", "snapshot_created": False}
             _print_json(report, args.output)
             return 0 if result.candles else 2
+
+        if args.command == "market-reconcile":
+            result = reconcile_market_data(SQLiteStore(args.db))
+            _print_json(result, args.output)
+            return 0 if result.get("status") == "READY" else 1
 
         if args.command == "risk-check":
             percent_names = (
