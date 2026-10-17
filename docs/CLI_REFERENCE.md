@@ -1,6 +1,6 @@
 # CLI Reference
 
-All commands run locally unless \`market-fetch\` is explicitly requested. Public market fetching is read-only. No CLI command submits an exchange order.
+ARASH separates online public-market data retrieval from deterministic research and paper simulation. Public market fetching is read-only; this development branch has no production order-routing adapter.
 
 ## Data quality
 
@@ -39,6 +39,12 @@ Review chronological holdout, model assumptions, and perturbations:
     python -m arash research-grid sample_data/research_demo_320.csv --strategies buy-hold sma-crossover --short-windows 3 5 --long-windows 15 20 --max-candidates 20
 
 Do not declare a winning configuration based only on a grid maximum. Disclose the full tested candidate family and reserve separate chronological data for follow-up analysis.
+
+Estimate candidate-selection instability with Combinatorial Symmetric Cross-Validation (CSCV). The input JSON must contain aligned per-period return series in fractions, net of the cost assumptions under study:
+
+    python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output artifacts/pbo-audit.json
+
+The diagnostic reports how often an in-sample-selected candidate ranks below the median on complementary out-of-sample blocks. It is not a future-loss probability, does not replace an untouched chronological holdout, and is not the Deflated Sharpe Ratio. The included demo series are synthetic examples, not observed market returns.
 
 ## Market diagnostics
 
