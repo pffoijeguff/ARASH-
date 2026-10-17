@@ -12,8 +12,9 @@ This roadmap is ambitious by design. It focuses on the combination that distingu
 
 ## Workstream 2 — Market data as a first-class system
 
-- [ ] Harden the initial public order-book stream with verified heartbeat/reconnect behavior, stale-feed alerts, sequence-gap detection and observable stream health.
+- [ ] Harden the public order-book and trade stream with verified heartbeat/reconnect behavior, stale-feed alerts, sequence-gap detection and observable stream health.
 - [ ] Expand streaming ingestion to multi-market trades, quotes, candles and instrument metadata, alongside venue-specific order-book events.
+- [ ] Profile rolling feature calculations under bursty data and add bounded persistent event capture with replay support.
 - [ ] Track exchange event time and local receive time; detect gaps, duplicates, clock skew and out-of-order updates.
 - [ ] Build point-in-time storage with provenance, revisions and reproducible dataset snapshots.
 - [ ] Expand cross-venue and cross-asset data support with explicit symbol, unit and precision contracts.
