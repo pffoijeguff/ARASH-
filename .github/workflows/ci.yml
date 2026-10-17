@@ -29,6 +29,16 @@ jobs:
         run: python -m pip install -e ".[dev,marketstream]"
       - name: Compile source and tests
         run: python -m compileall -q src tests
+      - name: Check installed dependency consistency
+        run: python -m pip check
+      - name: Lint the newly added research and stream components
+        run: >-
+          python -m ruff check
+          src/arash/data/streaming.py
+          src/arash/research/streaming_features.py
+          src/arash/research/pbo.py
+          src/arash/research/return_statistics.py
+          tests
       - name: Run checked-in regression tests
         run: python -m pytest -q tests
       - name: Verify CLI entry point
