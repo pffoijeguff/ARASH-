@@ -21,13 +21,26 @@
 | src/arash/research/ | Baseline backtests, holdout evaluations, market intelligence, regime labels, robustness, selection-bias notes, manifests, and report watch. |
 | src/arash/reporting/ | Descriptive realized-trade reports. |
 | src/arash/storage/ | SQLite candle store, market-snapshot lineage, local artifacts, and research-run records. |
-| .github/workflows/ | Package/install, compile and CLI-help sanity workflow; no unit-test step. |
+| .github/workflows/ci.yml | Python 3.12/3.13 package install, compile, checked-in tests, CLI smoke check and synthetic diagnostic integration checks. |
+| tests/ | Regression checks for research diagnostics, public feed payload parsing and rolling microstructure aggregation. |
 
-## Transfer caveats
+## Parity audit and merge blocker
 
-Some modules in the public work branch were reconstructed or normalized based on the supplied archive instead of copied byte-for-byte. Behavioral equivalence has not been established. The ZIP archive remains the reference for exact historical source.
+The uploaded ZIP remains the reference for exact historical source. A structural comparison shows that this Git branch is not yet behaviorally equivalent:
 
-The test suite and release gate have been deliberately skipped during this source-transfer phase. The work branch is not a verified release and must not be merged to main as a finished release until the synchronization gaps are addressed.
+- Reference `src/arash/cli.py`: 2,331 lines; this branch: 750 lines.
+- Reference `src/arash/paper/broker.py`: 1,248 lines; this branch: 635 lines.
+- Reference `src/arash/storage/sqlite_store.py`: 1,343 lines; this branch: 610 lines.
+- Several other research and execution modules are also substantially shorter in this branch.
+- The command surface differs: the reference archive exposes additional workflow commands that are absent from this reconstructed branch.
+
+This is a functional parity gap, not just a formatting difference. Do not merge this branch to `main` as the synchronized 28.0.0 source until the reference implementation and its tests are restored or every intentional deviation is audited and validated.
+
+## Verification status
+
+The current branch's GitHub Actions workflow passed on Python 3.12 and 3.13 at commit `7542e84c01da4758e425234da5ab2a0247150212`. The workflow checks package installation, Python compilation, the checked-in regression tests, CLI help, the synthetic PBO and return-statistics commands, and their non-execution output boundaries.
+
+Those checks are useful but limited: the current branch contains 17 checked-in regression cases, not the full reference test suite. The reference archive has 301 unique test cases; archive-side passing results are not evidence that the reconstructed branch passes those tests. No live exchange WebSocket session, provider-side schema compatibility, production execution path or full release gate has been verified.
 
 ## Operating boundaries
 
