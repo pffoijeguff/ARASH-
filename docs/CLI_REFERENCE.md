@@ -34,7 +34,7 @@ Receive ten market events for one market, showing ten order-book levels per side
 
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
-The command connects to the documented public WebSocket endpoint, subscribes to `public:orderbook-SYMBOL` and `public:trades-SYMBOL`, and requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL`. No API key is needed for these public channels. The feed emits validated JSON order-book snapshots and trade prints. A bounded feature engine adds rolling buy/sell reported-side volume and notional, notional imbalance, VWAP, latest book metrics and event-time window details. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
+The command connects to the documented public WebSocket endpoint, requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL` first, then subscribes to `public:orderbook-SYMBOL` and `public:trades-SYMBOL`. No API key is needed for these public channels. The feed emits validated JSON order-book snapshots and trade prints. A bounded feature engine adds rolling buy/sell reported-side volume and notional, notional imbalance, VWAP, latest book metrics and event-time window details. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
 
 The provider publishes order-book messages when the book changes, so quiet markets may have long gaps. Trade messages use the provider's reported `type` field; ARASH does not claim this is a verified aggressor-side classification. Displayed depth can change or disappear, and these features do not infer a buy/sell recommendation. Timestamp ordering, rolling metrics and provider behavior still need verification before the feed is used as an input to another system.
 
@@ -59,6 +59,14 @@ Estimate candidate-selection instability with Combinatorial Symmetric Cross-Vali
     python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output artifacts/pbo-audit.json
 
 The diagnostic reports how often an in-sample-selected candidate ranks below the median on complementary out-of-sample blocks. It is not a future-loss probability, does not replace an untouched chronological holdout, and is not the Deflated Sharpe Ratio. The included demo series are synthetic examples, not observed market returns.
+
+Estimate sampling uncertainty in a return series using a circular moving-block bootstrap:
+
+    python -m arash return-stats sample_data/return_stats_demo.json --iterations 2000 --block-length 5 --confidence-level 0.95 --seed 28
+
+The JSON input contains per-period **net return fractions** in a `returns` array. The report includes observed mean return and volatility, a Sharpe-like ratio, percentile confidence intervals, and a hash of the input file. Set `--periods-per-year` only when the sampling frequency and annualization convention are known.
+
+The block bootstrap preserves local order inside sampled blocks, but the interval depends on the chosen block length and assumptions about the return process. It does not correct for model selection, prove predictive value, or make a strategy investable. The included demonstration values are synthetic, not exchange data.
 
 ## Market diagnostics
 
