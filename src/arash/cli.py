@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import argparse
 import json
 import sys
@@ -14,6 +15,7 @@ from arash import __version__
 from arash.data.csv_loader import load_candles_csv
 from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
+from arash.data.streaming import stream_public_orderbook
 from arash.data.reconcile import reconcile_market_data
 from arash.storage.sqlite_store import SQLiteStore
 from arash.paper.execution import ExecutionPolicy, simulate_execution
@@ -107,6 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
     market.add_argument("--to", type=_aware_timestamp, help="Upper bound as ISO-8601; defaults to current UTC")
     market.add_argument("--timeout-seconds", type=float, default=8.0)
     market.add_argument("--output")
+
+    market_stream = commands.add_parser("market-stream", help="Stream public live order-book snapshots without trading permissions")
+    market_stream.add_argument("--symbol", required=True, help="Market symbol, for example BTCIRT")
+    market_stream.add_argument("--max-events", type=int, default=0, help="Stop after this many snapshots; 0 streams until interrupted")
+    market_stream.add_argument("--max-reconnects", type=int, default=5, help="Maximum consecutive reconnect attempts")
 
     sync_market = commands.add_parser("market-sync", help="Fetch public OHLCV candles and persist a provenance snapshot locally")
     sync_market.add_argument("--db", required=True)
@@ -433,6 +440,38 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(report, args.output)
             return 0 if result.candles else 2
 
+        if args.command == "market-stream":
+            if args.max_events < 0:
+                raise ValueError("--max-events must be zero or a positive integer")
+            event_count = 0
+            stop_event = asyncio.Event()
+
+            async def emit_snapshot(snapshot: Any) -> None:
+                nonlocal event_count
+                _print_json(snapshot.to_dict())
+                event_count += 1
+                if args.max_events and event_count >= args.max_events:
+                    stop_event.set()
+
+            try:
+                asyncio.run(stream_public_orderbook(
+                    args.symbol,
+                    emit_snapshot,
+                    stop_event=stop_event,
+                    max_reconnects=args.max_reconnects,
+                ))
+            except KeyboardInterrupt:
+                print("Market stream stopped by user.", file=sys.stderr)
+                return 130
+            _print_json({
+                "stream_status": "STOPPED",
+                "symbol": args.symbol.upper(),
+                "snapshots_received": event_count,
+                "read_only_public_market_data": True,
+                "orders_submitted": False,
+            })
+            return 0
+
         if args.command == "market-reconcile":
             result = reconcile_market_data(SQLiteStore(args.db))
             _print_json(result, args.output)
@@ -655,7 +694,7 @@ def main(argv: list[str] | None = None) -> int:
             return int(handle_paper_command(args) or 0)
 
         parser.error(f"unsupported command: {args.command}")
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
         print(f"arash: error: {exc}", file=sys.stderr)
         return 2
     return 2
