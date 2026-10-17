@@ -444,6 +444,7 @@ async def stream_public_orderbook(
 
     channel = f"public:orderbook-{normalized_symbol}"
     reconnects = 0
+    last_snapshot_at: datetime | None = None
     while stop_event is None or not stop_event.is_set():
         try:
             async with connect(
@@ -468,7 +469,6 @@ async def stream_public_orderbook(
                 await websocket.send(
                     json.dumps({"id": 2, "subscribe": {"channel": channel}})
                 )
-                last_snapshot_at: datetime | None = None
 
                 async def deliver_monotonic(snapshot: OrderBookSnapshot) -> None:
                     nonlocal last_snapshot_at
