@@ -24,6 +24,20 @@ Reconcile the local ledger and snapshot metadata:
 
 Market retrieval is opt-in. It uses a public read-only endpoint and does not touch trading accounts.
 
+## Live public order-book stream
+
+Install the optional streaming dependency:
+
+    python -m pip install ".[marketstream]"
+
+Receive ten snapshots for one market, showing ten levels per side:
+
+    python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
+
+The command first requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL`, then connects to the documented public WebSocket endpoint and subscribes to `public:orderbook-SYMBOL`. No API key is needed for this public channel. The feed emits validated JSON snapshots with bid/ask prices and sizes, midpoint, microprice, spread in basis points, receive lag, and top-depth quantity imbalance. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
+
+The provider publishes order-book messages when the book changes, so quiet markets may have long gaps. The initial REST snapshot gives the stream a starting book; the CLI does not infer a buy/sell recommendation from microstructure fields. Timestamp ordering and provider behavior still need verification before the feed is used as an input to another system.
+
 ## Backtesting and robustness
 
 Run a predeclared baseline:
