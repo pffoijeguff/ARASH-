@@ -8,7 +8,7 @@ This document records the research ideas informing the ARASH engineering roadmap
 
 Bailey, Borwein, López de Prado and Zhu describe how repeatedly selecting among backtested alternatives can produce apparently strong results that do not generalize. Their Probability of Backtest Overfitting framework is designed to quantify this risk. The Deflated Sharpe Ratio literature addresses selection bias from multiple trials and non-normal return distributions.
 
-**ARASH implication:** track the entire candidate family; keep the final holdout untouched; report the research search process; add appropriate PBO/DSR diagnostics; do not advertise the best grid result as evidence of a durable edge.
+**ARASH implication:** track the entire candidate family; keep the final holdout untouched; report the research search process; use appropriate PBO/DSR diagnostics; do not advertise the best grid result as evidence of a durable edge. The development branch now includes a CSCV-based PBO diagnostic and CLI entry point; it remains subject to verification.
 
 References:
 - Bailey et al., *The Probability of Backtest Overfitting*, Journal of Computational Finance (2015): https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2326253
