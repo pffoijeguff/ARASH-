@@ -9,12 +9,12 @@ import asyncio
 import inspect
 import json
 import re
+from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 NOBITEX_WEBSOCKET_URL = "wss://ws.nobitex.ir/connection/websocket"
 MAX_MESSAGE_BYTES = 2_000_000
