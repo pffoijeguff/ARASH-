@@ -17,6 +17,17 @@ from arash.data.connectors import CandleRequest, default_connector_registry
 from arash.paper.execution import ExecutionPolicy, simulate_execution
 from arash.paper.execution_stress import run_execution_stress_suite
 from arash.risk.engine import RiskInputs, RiskPolicy, assess_risk
+from arash.commands.paper import handle_paper_command
+from arash.research.backtest import BacktestConfig, run_backtest
+from arash.research.evaluation import evaluate_chronological_holdout
+from arash.research.intelligence import build_market_intelligence
+from arash.research.lab import run_experiment_grid
+from arash.research.portfolio import summarize_backtests
+from arash.research.quant_audit import audit_backtest_result
+from arash.research.regimes import analyze_market_regimes
+from arash.research.robustness import run_parameter_perturbations, run_chronological_subperiods
+from arash.research.selection_bias import audit_candidate_family
+from arash.research.pipeline import run_research_pipeline
 
 
 def _decimal(value: str) -> Decimal:
@@ -139,6 +150,143 @@ def build_parser() -> argparse.ArgumentParser:
     stress.add_argument("--max-participation-rate", type=_decimal, default=Decimal("0.10"))
     stress.add_argument("--max-bars", type=int, default=20)
     stress.add_argument("--output")
+
+    def add_backtest_options(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument("path")
+        command_parser.add_argument("--strategy", choices=["buy-hold", "sma-crossover"], default="buy-hold")
+        command_parser.add_argument("--initial-cash", type=_decimal, default=Decimal("10000"))
+        command_parser.add_argument("--position-fraction", type=_decimal, default=Decimal("0.10"))
+        command_parser.add_argument("--fee-rate", type=_decimal, default=Decimal("0.001"))
+        command_parser.add_argument("--slippage-rate", type=_decimal, default=Decimal("0.0005"))
+        command_parser.add_argument("--spread-rate", type=_decimal, default=Decimal("0"))
+        command_parser.add_argument("--market-impact-rate", type=_decimal, default=Decimal("0"))
+        command_parser.add_argument("--short-window", type=int, default=5)
+        command_parser.add_argument("--long-window", type=int, default=20)
+        command_parser.add_argument("--liquidity-warning-threshold", type=_decimal, default=Decimal("0.10"))
+        command_parser.add_argument("--output")
+    backtest = commands.add_parser("backtest", help="Run an offline buy-hold or SMA baseline backtest")
+    add_backtest_options(backtest)
+    evaluate = commands.add_parser("evaluate", help="Run a chronological fixed-parameter holdout evaluation")
+    add_backtest_options(evaluate)
+    evaluate.add_argument("--train-fraction", type=_decimal, default=Decimal("0.70"))
+    audit = commands.add_parser("quant-audit", help="Audit a baseline backtest's accounting and trade metrics")
+    add_backtest_options(audit)
+    robust = commands.add_parser("robustness", help="Run predeclared cost and position-size sensitivity scenarios")
+    add_backtest_options(robust)
+    robust.add_argument("--fee-multipliers", type=_decimal, nargs="+", default=[Decimal("1"),Decimal("1.5"),Decimal("2")])
+    robust.add_argument("--slippage-multipliers", type=_decimal, nargs="+", default=[Decimal("1"),Decimal("2")])
+    robust.add_argument("--subperiods", type=int, default=4)
+    regimes = commands.add_parser("regime-analysis", help="Describe prior-only market regimes from OHLCV")
+    regimes.add_argument("path")
+    regimes.add_argument("--lookback", type=int, default=20)
+    regimes.add_argument("--trend-threshold-pct", type=_decimal, default=Decimal("2.0"))
+    regimes.add_argument("--high-volatility-threshold-pct", type=_decimal, default=Decimal("1.0"))
+    regimes.add_argument("--output")
+    intelligence = commands.add_parser("market-intelligence", help="Build a descriptive OHLCV intelligence report")
+    intelligence.add_argument("path")
+    intelligence.add_argument("--rsi-period", type=int, default=14)
+    intelligence.add_argument("--atr-period", type=int, default=14)
+    intelligence.add_argument("--volume-lookback", type=int, default=20)
+    intelligence.add_argument("--regime-lookback", type=int, default=20)
+    intelligence.add_argument("--output")
+    pipeline = commands.add_parser("research-pipeline", help="Run CSV health gate and offline baseline backtest")
+    pipeline.add_argument("path")
+    pipeline.add_argument("--strategy", choices=["buy-hold", "sma-crossover"], default="buy-hold")
+    pipeline.add_argument("--output", required=True, help="Write the JSON report to this path")
+
+    grid = commands.add_parser("research-grid", help="Run a bounded experiment grid without selecting a winner")
+    grid.add_argument("path")
+    grid.add_argument("--strategies", nargs="+", choices=["buy-hold", "sma-crossover"], default=["buy-hold","sma-crossover"])
+    grid.add_argument("--short-windows", type=int, nargs="+", default=[5])
+    grid.add_argument("--long-windows", type=int, nargs="+", default=[20])
+    grid.add_argument("--position-fractions", type=_decimal, nargs="+", default=[Decimal("0.10")])
+    grid.add_argument("--max-candidates", type=int, default=100)
+    grid.add_argument("--output")
+
+    selection = commands.add_parser("selection-bias-audit", help="Summarize candidate-family selection-bias risk")
+    selection.add_argument("--returns-pct", type=_decimal, nargs="+", required=True)
+    selection.add_argument("--declared-candidate-count", type=int)
+    selection.add_argument("--output")
+
+    paper_create = commands.add_parser("paper-account-create", help="Create a local simulated paper account")
+    paper_create.add_argument("--db", required=True)
+    paper_create.add_argument("--account-id", required=True)
+    paper_create.add_argument("--initial-cash", type=_decimal, required=True)
+    paper_create.add_argument("--account-currency", default="SIMULATED_UNITS")
+
+    paper_register = commands.add_parser("paper-instrument-register", help="Register an explicit instrument currency contract")
+    paper_register.add_argument("--db", required=True)
+    paper_register.add_argument("--symbol", required=True)
+    paper_register.add_argument("--base-currency", required=True)
+    paper_register.add_argument("--quote-currency", required=True)
+
+    paper_order = commands.add_parser("paper-order", help="Record a risk-gated local simulated spot order")
+    paper_order.add_argument("--db", required=True)
+    paper_order.add_argument("--account-id", required=True)
+    paper_order.add_argument("--client-order-id", required=True)
+    paper_order.add_argument("--symbol", required=True)
+    paper_order.add_argument("--side", choices=["buy","sell"], required=True)
+    paper_order.add_argument("--quantity", type=_decimal, required=True)
+    paper_order.add_argument("--reference-price", type=_decimal, required=True)
+    paper_order.add_argument("--at")
+    paper_order.add_argument("--stop-price", type=_decimal)
+    paper_order.add_argument("--peak-equity", type=_decimal)
+    paper_order.add_argument("--daily-start-equity", type=_decimal)
+    paper_order.add_argument("--risk-enabled", action="store_true", help="Legacy compatibility flag; explicit risk values remain mandatory.")
+    paper_order.add_argument("--risk-per-trade-pct", type=_decimal, default=Decimal("1"))
+    paper_order.add_argument("--max-position-pct", type=_decimal, default=Decimal("20"))
+    paper_order.add_argument("--max-portfolio-exposure-pct", type=_decimal, default=Decimal("60"))
+    paper_order.add_argument("--max-daily-loss-pct", type=_decimal, default=Decimal("3"))
+    paper_order.add_argument("--max-drawdown-pct", type=_decimal, default=Decimal("10"))
+    paper_order.add_argument("--fee-rate", type=_decimal, default=Decimal("0.001"))
+    paper_order.add_argument("--slippage-rate", type=_decimal, default=Decimal("0.0005"))
+    paper_order.add_argument("--mark", action="append", nargs=2, metavar=("SYMBOL","PRICE"), default=[])
+    paper_status = commands.add_parser("paper-status", help="Value an offline paper account using explicit marks")
+    paper_status.add_argument("--db", required=True)
+    paper_status.add_argument("--account-id", required=True)
+    paper_status.add_argument("--mark", action="append", nargs=2, metavar=("SYMBOL","PRICE"), default=[])
+    paper_status.add_argument("--at")
+    paper_status.add_argument("--record", action="store_true")
+    for command_name, help_text in [
+        ("paper-history","List local simulated paper orders"),
+        ("paper-snapshots","List persisted local paper-account snapshots"),
+    ]:
+        item=commands.add_parser(command_name,help=help_text)
+        item.add_argument("--db",required=True)
+        item.add_argument("--account-id",required=True)
+        item.add_argument("--limit",type=int,default=100)
+    paper_risk = commands.add_parser("paper-risk-audit", help="Audit a persisted paper account against explicit risk limits")
+    paper_risk.add_argument("--db",required=True)
+    paper_risk.add_argument("--account-id",required=True)
+    paper_risk.add_argument("--mark",action="append",nargs=2,default=[])
+    paper_risk.add_argument("--mark-at",action="append",nargs=2,default=[])
+    paper_risk.add_argument("--at")
+    paper_risk.add_argument("--max-mark-age-seconds",type=int,default=3600)
+    paper_risk.add_argument("--max-daily-loss-pct",type=_decimal,default=Decimal("3"))
+    paper_risk.add_argument("--max-drawdown-pct",type=_decimal,default=Decimal("10"))
+    paper_risk.add_argument("--max-position-pct",type=_decimal,default=Decimal("20"))
+    paper_risk.add_argument("--max-portfolio-exposure-pct",type=_decimal,default=Decimal("60"))
+    paper_risk.add_argument("--risk-day-timezone",default="UTC")
+    paper_risk.add_argument("--output")
+    paper_stress = commands.add_parser("paper-risk-stress",help="Run deterministic hypothetical paper-portfolio stress scenarios")
+    paper_stress.add_argument("--db",required=True)
+    paper_stress.add_argument("--account-id",required=True)
+    paper_stress.add_argument("--mark",action="append",nargs=2,default=[])
+    paper_stress.add_argument("--mark-at",action="append",nargs=2,default=[])
+    paper_stress.add_argument("--at")
+    paper_stress.add_argument("--max-mark-age-seconds",type=int,default=3600)
+    paper_stress.add_argument("--max-daily-loss-pct",type=_decimal,default=Decimal("3"))
+    paper_stress.add_argument("--max-drawdown-pct",type=_decimal,default=Decimal("10"))
+    paper_stress.add_argument("--max-position-pct",type=_decimal,default=Decimal("20"))
+    paper_stress.add_argument("--max-portfolio-exposure-pct",type=_decimal,default=Decimal("60"))
+    paper_stress.add_argument("--risk-day-timezone",default="UTC")
+    paper_stress.add_argument("--output")
+    paper_reset = commands.add_parser("paper-risk-reset",help="Manually clear an active paper-account kill switch")
+    paper_reset.add_argument("--db",required=True)
+    paper_reset.add_argument("--account-id",required=True)
+    paper_reset.add_argument("--reason",required=True)
+    paper_reset.add_argument("--confirm-reset",action="store_true")
+    paper_reset.add_argument("--at")
 
     return parser
 
@@ -276,6 +424,87 @@ def main(argv: list[str] | None = None) -> int:
             )
             _print_json(result, args.output)
             return 0
+
+        if args.command in {"backtest", "evaluate", "quant-audit", "robustness"}:
+            candles = load_candles_csv(args.path)
+            config = BacktestConfig(
+                initial_cash=args.initial_cash,
+                position_fraction=args.position_fraction,
+                fee_rate=args.fee_rate,
+                slippage_rate=args.slippage_rate,
+                spread_rate=args.spread_rate,
+                market_impact_rate=args.market_impact_rate,
+                liquidity_warning_threshold=args.liquidity_warning_threshold,
+                short_window=args.short_window,
+                long_window=args.long_window,
+            )
+            if args.command == "backtest":
+                result = run_backtest(candles, strategy=args.strategy, config=config)
+                _print_json(result.to_dict(include_trades=True, include_equity_curve=True), args.output)
+                return 0
+            if args.command == "evaluate":
+                result = evaluate_chronological_holdout(
+                    candles, strategy=args.strategy, config=config, train_fraction=args.train_fraction
+                )
+                _print_json(result.to_dict(), args.output)
+                return 0
+            if args.command == "quant-audit":
+                result = run_backtest(candles, strategy=args.strategy, config=config)
+                _print_json({"backtest": result.to_dict(include_trades=False), "audit": audit_backtest_result(result)}, args.output)
+                return 0
+            results = run_parameter_perturbations(
+                candles, strategy=args.strategy, base_config=config,
+                fee_multipliers=args.fee_multipliers,
+                slippage_multipliers=args.slippage_multipliers,
+            )
+            results["chronological_subperiods"] = run_chronological_subperiods(
+                candles, strategy=args.strategy, config=config, segments=args.subperiods
+            )
+            _print_json(results, args.output)
+            return 0
+
+        if args.command == "regime-analysis":
+            result = analyze_market_regimes(
+                load_candles_csv(args.path), lookback=args.lookback,
+                trend_threshold_pct=args.trend_threshold_pct,
+                high_volatility_threshold_pct=args.high_volatility_threshold_pct,
+            )
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "market-intelligence":
+            result = build_market_intelligence(
+                load_candles_csv(args.path), rsi_period=args.rsi_period,
+                atr_period=args.atr_period, volume_lookback=args.volume_lookback,
+                regime_lookback=args.regime_lookback,
+            )
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "research-pipeline":
+            result = run_research_pipeline(args.path, strategy=args.strategy, output_path=args.output)
+            _print_json(result)
+            return 0 if result.get("status") == "COMPLETED_OFFLINE_SIMULATION" else 1
+
+        if args.command == "research-grid":
+            result = run_experiment_grid(
+                load_candles_csv(args.path), strategies=args.strategies,
+                short_windows=args.short_windows, long_windows=args.long_windows,
+                position_fractions=args.position_fractions, max_candidates=args.max_candidates,
+            )
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "selection-bias-audit":
+            result = audit_candidate_family(args.returns_pct, declared_candidate_count=args.declared_candidate_count)
+            _print_json(result, args.output)
+            return 0
+
+        if args.command in {
+            "paper-account-create","paper-instrument-register","paper-order","paper-status",
+            "paper-history","paper-snapshots","paper-risk-audit","paper-risk-stress","paper-risk-reset"
+        }:
+            return int(handle_paper_command(args) or 0)
 
         parser.error(f"unsupported command: {args.command}")
     except (OSError, ValueError, KeyError) as exc:
