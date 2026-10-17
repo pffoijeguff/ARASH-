@@ -99,4 +99,4 @@ def test_bootstrap_rejects_invalid_return_values(bad_value: object) -> None:
 
 def test_bootstrap_enforces_work_budget() -> None:
     with pytest.raises(ValueError, match="work budget"):
-        bootstrap_return_statistics(valid_returns(), iterations=50_000)
+        bootstrap_return_statistics(valid_returns() * 6, iterations=50_000)
