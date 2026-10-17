@@ -29,8 +29,8 @@ jobs:
           from pathlib import Path
           p = sorted(Path(".recovery").glob("reference.zip.b64.part*"))
           total = sum(len(x.read_text(encoding="ascii").strip()) for x in p)
-          complete = len(p) == 9 and total == 366328
-          print(f"Archive chunks: {len(p)}/9; encoded characters: {total}/366328")
+          complete = len(p) == 46 and total == 366328
+          print(f"Archive chunks: {len(p)}/46; encoded characters: {total}/366328")
           with open(__import__("os").environ["GITHUB_OUTPUT"], "a") as out:
               out.write(f"complete={'true' if complete else 'false'}\\n")
           PY
