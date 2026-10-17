@@ -15,7 +15,8 @@ from arash import __version__
 from arash.data.csv_loader import load_candles_csv
 from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
-from arash.data.streaming import stream_public_orderbook
+from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_orderbook
+from arash.research.streaming_features import StreamingMicrostructureFeatures
 from arash.data.reconcile import reconcile_market_data
 from arash.storage.sqlite_store import SQLiteStore
 from arash.paper.execution import ExecutionPolicy, simulate_execution
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     market_stream.add_argument("--max-events", type=int, default=0, help="Stop after this many snapshots; 0 streams until interrupted")
     market_stream.add_argument("--max-reconnects", type=int, default=5, help="Maximum consecutive reconnect attempts")
     market_stream.add_argument("--depth-levels", type=int, default=10, help="Order-book levels per side to include in each JSON event (1-500)")
+    market_stream.add_argument("--flow-window-seconds", type=int, default=60, help="Rolling reported-trade flow window in seconds (5-3600)")
 
     sync_market = commands.add_parser("market-sync", help="Fetch public OHLCV candles and persist a provenance snapshot locally")
     sync_market.add_argument("--db", required=True)
@@ -446,12 +448,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("--max-events must be zero or a positive integer")
             if not 1 <= args.depth_levels <= 500:
                 raise ValueError("--depth-levels must be between 1 and 500")
+            if not 5 <= args.flow_window_seconds <= 3600:
+                raise ValueError("--flow-window-seconds must be between 5 and 3600")
+            feature_engine = StreamingMicrostructureFeatures(
+                window_seconds=args.flow_window_seconds,
+                depth_limit=args.depth_levels,
+            )
             event_count = 0
             stop_event = asyncio.Event()
 
-            async def emit_snapshot(snapshot: Any) -> None:
+            async def emit_snapshot(event: OrderBookSnapshot | PublicTrade) -> None:
                 nonlocal event_count
-                _print_json(snapshot.to_dict(depth_limit=args.depth_levels))
+                _print_json(feature_engine.observe(event))
                 event_count += 1
                 if args.max_events and event_count >= args.max_events:
                     stop_event.set()
@@ -460,6 +468,7 @@ def main(argv: list[str] | None = None) -> int:
                 asyncio.run(stream_public_orderbook(
                     args.symbol,
                     emit_snapshot,
+                    on_trade=emit_snapshot,
                     stop_event=stop_event,
                     max_reconnects=args.max_reconnects,
                 ))
@@ -469,7 +478,9 @@ def main(argv: list[str] | None = None) -> int:
             _print_json({
                 "stream_status": "STOPPED",
                 "symbol": args.symbol.upper(),
-                "snapshots_received": event_count,
+                "events_received": event_count,
+                "event_types": ["public_orderbook_snapshot", "public_trade"],
+                "rolling_flow_window_seconds": args.flow_window_seconds,
                 "read_only_public_market_data": True,
                 "orders_submitted": False,
             })
