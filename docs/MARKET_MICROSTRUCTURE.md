@@ -46,6 +46,19 @@ For the number of levels requested by `--depth-levels`, ARASH computes:
 
 The range is ordinarily from -1 to +1 for non-negative quantities. Positive values mean more displayed quantity on the bid side of the selected depth; negative values mean more on the ask side. It does **not** mean price will rise or fall. The current measurement sums displayed quantities, not the quote-currency notional at each price.
 
+### Rolling reported-trade flow
+
+The stream also subscribes to the public `public:trades-SYMBOL` channel. For the configured rolling window (`--flow-window-seconds`, from 5 to 3600 seconds), the feature engine reports:
+
+- number of retained trade events;
+- reported buy and sell volume in base units and quote notional;
+- difference between reported buy and sell quote notional;
+- normalized reported-side notional imbalance, bounded between -1 and +1 when the total notional is positive;
+- volume-weighted average trade price over the window;
+- latest trade timestamp and event-time window boundaries.
+
+These fields use the exchange's reported `type` value; ARASH does not claim it proves the aggressor side or predicts the next price movement. The rolling state is bounded by both window age and a maximum event count. Trade prints are only observed after the live subscription begins; the public book REST bootstrap is not a historical trade feed.
+
 ### Timestamps and provider offset
 
 - `exchange_timestamp` comes from the provider's order-book update timestamp.
