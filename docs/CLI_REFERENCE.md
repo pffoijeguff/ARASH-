@@ -32,7 +32,7 @@ Install the optional streaming dependency:
 
 Receive ten market events for one market, showing ten order-book levels per side with a rolling 60-second trade-flow window:
 
-    python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
+    python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10 --flow-window-seconds 60
 
 The command connects to the documented public WebSocket endpoint, requests a bounded initial snapshot from `GET /v3/orderbook/SYMBOL` first, then subscribes to `public:orderbook-SYMBOL` and `public:trades-SYMBOL`. No API key is needed for these public channels. The feed emits validated JSON order-book snapshots and trade prints. A bounded feature engine adds rolling buy/sell reported-side volume and notional, notional imbalance, VWAP, latest book metrics and event-time window details. Output depth is bounded by `--depth-levels` (1–500). Use `--max-events 0` to continue until interrupted; `--max-reconnects` caps consecutive reconnect attempts.
 
