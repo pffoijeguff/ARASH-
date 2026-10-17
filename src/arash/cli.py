@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
 from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data
 from arash.research.streaming_features import StreamingMicrostructureFeatures
+from arash.research.return_statistics import bootstrap_return_statistics
 from arash.data.reconcile import reconcile_market_data
 from arash.storage.sqlite_store import SQLiteStore
 from arash.paper.execution import ExecutionPolicy, simulate_execution
@@ -258,6 +260,15 @@ def build_parser() -> argparse.ArgumentParser:
     pbo.add_argument("path", help="JSON file containing aligned candidate_returns arrays")
     pbo.add_argument("--blocks", type=int, default=8, help="Even number of contiguous CSCV blocks (4-14)")
     pbo.add_argument("--output")
+
+    return_stats = commands.add_parser("return-stats", help="Estimate return uncertainty with a circular block bootstrap")
+    return_stats.add_argument("path", help="JSON file with a returns array of per-period net return fractions")
+    return_stats.add_argument("--iterations", type=int, default=2000)
+    return_stats.add_argument("--block-length", type=int, default=5)
+    return_stats.add_argument("--confidence-level", type=float, default=0.95)
+    return_stats.add_argument("--seed", type=int, default=0)
+    return_stats.add_argument("--periods-per-year", type=int)
+    return_stats.add_argument("--output")
 
     paper_create = commands.add_parser("paper-account-create", help="Create a local simulated paper account")
     paper_create.add_argument("--db", required=True)
@@ -670,6 +681,27 @@ def main(argv: list[str] | None = None) -> int:
                 payload["candidate_returns"], blocks=args.blocks
             )
             result["input_path"] = str(report_path)
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "return-stats":
+            report_path = Path(args.path)
+            if not report_path.is_file() or report_path.stat().st_size > 5_000_000:
+                raise ValueError("return-statistics input must be an existing JSON file no larger than 5 MB")
+            raw_input = report_path.read_bytes()
+            payload = json.loads(raw_input)
+            if not isinstance(payload, dict) or not isinstance(payload.get("returns"), list):
+                raise ValueError("return-statistics input must be a JSON object with a returns array")
+            result = bootstrap_return_statistics(
+                payload["returns"],
+                iterations=args.iterations,
+                block_length=args.block_length,
+                confidence_level=args.confidence_level,
+                seed=args.seed,
+                periods_per_year=args.periods_per_year,
+            )
+            result["input_path"] = str(report_path)
+            result["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
             _print_json(result, args.output)
             return 0
 
