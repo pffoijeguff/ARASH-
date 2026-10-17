@@ -1,12 +1,12 @@
 # ARASH Live Market Microstructure
 
-ARASH's initial public order-book stream is an online market-observation component. It provides validated snapshots that downstream research and monitoring components can consume. It intentionally does not convert these observations directly into buy/sell recommendations.
+ARASH's public market stream is an online market-observation component for order-book and reported trade events. It provides validated snapshots that downstream research and monitoring components can consume. It intentionally does not convert these observations directly into buy/sell recommendations.
 
 ## Data lifecycle
 
-1. Subscribe to the public order-book channel for the selected symbol.
-2. Fetch a bounded initial public REST snapshot from the documented v3 order-book endpoint.
-3. Parse full order-book publications, validate each side and timestamp, sort bid/ask levels, and reject malformed, non-finite, crossed or locked books.
+1. Fetch a bounded initial public REST snapshot from the documented v3 order-book endpoint.
+2. Connect to the public WebSocket endpoint and subscribe to the public order-book and public-trades channels for the selected symbol.
+3. Parse full order-book publications and reported public trade prints, validate prices, volumes and timestamps, sort bid/ask levels, and reject malformed, non-finite, crossed or locked books.
 4. Emit structured JSON observations with exchange timestamp, local receive timestamp and the provider publication offset when available.
 5. Reconnect under a bounded backoff after a stream failure; ignore snapshots that arrive with an exchange timestamp older than the last delivered snapshot.
 
