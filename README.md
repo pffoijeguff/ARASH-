@@ -56,7 +56,7 @@ For a live read-only public order-book stream (requires the optional WebSocket d
 
 The streaming command subscribes to Nobitex's public WebSocket channel and bootstraps the initial book from the public REST snapshot. It reports market observations only and does not submit orders.
 
-Browse the [CLI reference](docs/CLI_REFERENCE.md), [architecture](docs/ARCHITECTURE.md), [research protocol](docs/RESEARCH_PROTOCOL.md), [research foundations](docs/RESEARCH_FOUNDATIONS.md), and [risk-control principles](docs/RISK_AND_SAFETY.md).
+Browse the [CLI reference](docs/CLI_REFERENCE.md), [architecture](docs/ARCHITECTURE.md), [live market microstructure guide](docs/MARKET_MICROSTRUCTURE.md), [research protocol](docs/RESEARCH_PROTOCOL.md), [research foundations](docs/RESEARCH_FOUNDATIONS.md), and [risk-control principles](docs/RISK_AND_SAFETY.md).
 
 ## The next-generation target
 
