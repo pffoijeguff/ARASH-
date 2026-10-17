@@ -10,7 +10,7 @@ import inspect
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Awaitable, Callable
 
@@ -50,8 +50,8 @@ class BookLevel:
     quantity: Decimal
 
     def __post_init__(self) -> None:
-        _positive_decimal(self.price, "price")
-        _positive_decimal(self.quantity, "quantity")
+        object.__setattr__(self, "price", _positive_decimal(self.price, "price"))
+        object.__setattr__(self, "quantity", _positive_decimal(self.quantity, "quantity"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,15 +70,27 @@ class OrderBookSnapshot:
         object.__setattr__(self, "symbol", normalized)
         for field_name in ("exchange_timestamp", "received_at"):
             value = getattr(self, field_name)
+            if not isinstance(value, datetime):
+                raise ValueError(f"{field_name} must be a datetime")
             if value.tzinfo is None or value.utcoffset() is None:
                 raise ValueError(f"{field_name} must be timezone-aware")
             object.__setattr__(self, field_name, value.astimezone(timezone.utc))
+        bids = tuple(self.bids)
+        asks = tuple(self.asks)
+        if any(not isinstance(level, BookLevel) for level in bids + asks):
+            raise ValueError("bids and asks must contain BookLevel values")
+        object.__setattr__(self, "bids", tuple(sorted(bids, key=lambda level: level.price, reverse=True)))
+        object.__setattr__(self, "asks", tuple(sorted(asks, key=lambda level: level.price)))
         if not self.bids or not self.asks:
             raise ValueError("order book must contain at least one bid and one ask")
         if self.best_bid >= self.best_ask:
             raise ValueError("crossed or locked order book snapshot is not admissible")
+        if self.exchange_timestamp > self.received_at + timedelta(seconds=5):
+            raise ValueError("exchange timestamp is implausibly far in the future")
         if self.last_trade_price is not None:
-            _positive_decimal(self.last_trade_price, "last_trade_price")
+            object.__setattr__(
+                self, "last_trade_price", _positive_decimal(self.last_trade_price, "last_trade_price")
+            )
         if self.update_offset is not None and (
             type(self.update_offset) is not int or self.update_offset < 0
         ):
@@ -234,7 +246,7 @@ def parse_public_orderbook_message(
         raise PublicMarketStreamError("Order-book publication is missing bids or asks")
 
     raw_timestamp = data.get("lastUpdate")
-    if isinstance(raw_timestamp, bool):
+    if isinstance(raw_timestamp, bool) or not isinstance(raw_timestamp, (int, str)):
         raise PublicMarketStreamError("lastUpdate must be a Unix timestamp in milliseconds")
     try:
         timestamp_ms = int(raw_timestamp)
