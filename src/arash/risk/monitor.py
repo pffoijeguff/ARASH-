@@ -128,12 +128,18 @@ def audit_portfolio_risk(
         peak = max([snapshot.initial_cash, current_equity, *(v for _, v in earlier)], default=snapshot.initial_cash)
 
     prior_day = [(ts, value) for ts, value in earlier if ts < day_start]
+    current_day = [(ts, value) for ts, value in earlier if ts >= day_start]
     if prior_day:
         daily_start = prior_day[-1][1]
         baseline_source = f"latest_persisted_snapshot_before_{risk_day_timezone}_day"
+    elif current_day:
+        # If no prior-day observation exists, use the first available observation within
+        # the current risk day rather than falling directly back to the original deposit.
+        daily_start = current_day[0][1]
+        baseline_source = f"first_persisted_snapshot_within_{risk_day_timezone}_day_fallback"
     else:
         daily_start = snapshot.initial_cash
-        baseline_source = f"initial_cash_fallback_no_pre_{risk_day_timezone}_day_snapshot"
+        baseline_source = f"initial_cash_fallback_no_day_snapshot"
     if daily_start <= ZERO:
         daily_start = snapshot.initial_cash
 

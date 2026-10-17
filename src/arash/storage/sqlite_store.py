@@ -227,7 +227,11 @@ class SQLiteStore:
             consecutive = int(previous["consecutive_errors"]) + 1 if status == "error" and previous else (1 if status == "error" else 0)
             sync_count = int(previous["sync_count"]) + 1 if previous else 1
             success_at = fetched_at.isoformat() if status in {"ok", "no_data"} else None
-            old = self.get_market_sync_state(source, symbol, interval)
+            old_row = conn.execute(
+                "SELECT * FROM market_sync_state WHERE source=? AND symbol=? AND interval=?",
+                (source, symbol, interval),
+            ).fetchone()
+            old = dict(old_row) if old_row is not None else None
             if old and not success_at:
                 success_at = old.get("last_success_at")
             conn.execute(

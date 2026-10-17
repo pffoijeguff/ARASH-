@@ -38,7 +38,14 @@ def run_research_pipeline(
         path=Path(output_path);path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True,default=str)+"\n",encoding="utf-8")
         report["output_path"]=str(path)
-        report["manifest"]=build_research_manifest(path)
+        manifest = build_research_manifest(path)
+        manifest_path = path.with_suffix(path.suffix + ".manifest.json")
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        report["manifest"]=manifest
+        report["manifest_path"]=str(manifest_path)
     else:
         report["manifest"]=None
     return report

@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -153,7 +154,7 @@ class _OpenPosition:
     quantity: Decimal
     entry_price: Decimal
     entry_fee: Decimal
-    opened_at: object
+    opened_at: datetime
 
 
 def _decimal_canonical(value: Decimal) -> str:
@@ -290,7 +291,7 @@ def run_backtest(source_candles: list[Candle], *, strategy: StrategyName, config
             trade_id=f"{strategy}-{len(closed)+1:05d}", symbol=candles[0].symbol,
             direction=Direction.LONG, quantity=current.quantity, entry_price=current.entry_price,
             exit_price=fill, entry_fee=current.entry_fee, exit_fee=fee,
-            opened_at=current.opened_at, closed_at=candle.timestamp,  # type: ignore[arg-type]
+            opened_at=current.opened_at, closed_at=candle.timestamp,
         ))
         position = None
 
