@@ -15,6 +15,7 @@ from arash.data.csv_loader import load_candles_csv
 from arash.data.health import audit_csv_health
 from arash.data.connectors import CandleRequest, default_connector_registry
 from arash.paper.execution import ExecutionPolicy, simulate_execution
+from arash.paper.execution_batch import simulate_execution_batch
 from arash.paper.execution_stress import run_execution_stress_suite
 from arash.risk.engine import RiskInputs, RiskPolicy, assess_risk
 from arash.commands.paper import handle_paper_command
@@ -22,6 +23,7 @@ from arash.research.backtest import BacktestConfig, run_backtest
 from arash.research.evaluation import evaluate_chronological_holdout
 from arash.research.intelligence import build_market_intelligence
 from arash.research.lab import run_experiment_grid
+from arash.research.manifest import build_research_manifest
 from arash.research.watch import state_from_market_report, evaluate_state_change
 from arash.research.portfolio import summarize_backtests
 from arash.research.quant_audit import audit_backtest_result
@@ -151,6 +153,22 @@ def build_parser() -> argparse.ArgumentParser:
     stress.add_argument("--max-participation-rate", type=_decimal, default=Decimal("0.10"))
     stress.add_argument("--max-bars", type=int, default=20)
     stress.add_argument("--output")
+
+    batch = commands.add_parser("execution-batch", help="Run independent simulations for a bounded order list")
+    batch.add_argument("path", help="OHLCV CSV data file")
+    batch.add_argument("orders_json", help="JSON object containing an orders array")
+    batch.add_argument("--fee-rate", type=_decimal, default=Decimal("0.001"))
+    batch.add_argument("--slippage-rate", type=_decimal, default=Decimal("0.0005"))
+    batch.add_argument("--spread-rate", type=_decimal, default=Decimal("0.001"))
+    batch.add_argument("--market-impact-rate", type=_decimal, default=Decimal("0.002"))
+    batch.add_argument("--max-participation-rate", type=_decimal, default=Decimal("0.10"))
+    batch.add_argument("--max-bars", type=int, default=20)
+    batch.add_argument("--max-orders", type=int, default=100)
+    batch.add_argument("--output")
+
+    manifest_parser = commands.add_parser("research-manifest", help="Generate a SHA-256 provenance manifest for a JSON report")
+    manifest_parser.add_argument("path")
+    manifest_parser.add_argument("--output")
 
     def add_backtest_options(command_parser: argparse.ArgumentParser) -> None:
         command_parser.add_argument("path")
@@ -399,6 +417,33 @@ def main(argv: list[str] | None = None) -> int:
             ), policy)
             _print_json(assessment.to_dict(), args.output)
             return 0 if assessment.allowed else 1
+
+        if args.command == "research-manifest":
+            result = build_research_manifest(args.path)
+            _print_json(result, args.output)
+            return 0
+
+        if args.command == "execution-batch":
+            report_path = Path(args.orders_json)
+            if not report_path.is_file() or report_path.stat().st_size > 2_000_000:
+                raise ValueError("orders JSON must be an existing file no larger than 2 MB")
+            orders_payload = json.loads(report_path.read_text(encoding="utf-8"))
+            if not isinstance(orders_payload, dict) or not isinstance(orders_payload.get("orders"), list):
+                raise ValueError("orders JSON must be an object with an 'orders' array")
+            candles = load_candles_csv(args.path)
+            batch_policy = ExecutionPolicy(
+                fee_rate=args.fee_rate,
+                slippage_rate=args.slippage_rate,
+                spread_rate=args.spread_rate,
+                market_impact_rate=args.market_impact_rate,
+                max_participation_rate=args.max_participation_rate,
+                max_bars=args.max_bars,
+            )
+            result = simulate_execution_batch(
+                candles, orders_payload["orders"], policy=batch_policy, max_orders=args.max_orders
+            )
+            _print_json(result, args.output)
+            return 0
 
         if args.command in {"execution-simulate", "execution-stress"}:
             candles = load_candles_csv(args.path)
