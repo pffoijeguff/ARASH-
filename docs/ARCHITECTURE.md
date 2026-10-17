@@ -61,7 +61,7 @@ A resilient runtime should also include bounded queues, idempotent command ident
 ## Current branch mapping
 
 - src/arash/cli.py: CLI and command orchestration.
-- src/arash/data: local market data, validation, quality checks, reconciliation and snapshots.
+- src/arash/data: market-data validation, snapshots, reconciliation and streaming.py for live public WebSocket order-book snapshots, timestamps, spread, microprice and depth metrics.
 - src/arash/integrations: public read-only market-data adapters.
 - src/arash/research: backtests, chronological evaluation, robustness and research diagnostics.
 - src/arash/risk: explicit risk inputs, sizing and exposure checks.
