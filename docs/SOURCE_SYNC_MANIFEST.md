@@ -38,7 +38,7 @@ This is a functional parity gap, not just a formatting difference. Do not merge 
 
 ## Verification status
 
-The current branch's GitHub Actions workflow passed on Python 3.12 and 3.13 at commit `7542e84c01da4758e425234da5ab2a0247150212`. The workflow checks package installation, Python compilation, the checked-in regression tests, CLI help, the synthetic PBO and return-statistics commands, and their non-execution output boundaries.
+The current branch's GitHub Actions workflow passed on Python 3.12 and 3.13 at commit `24162f1e7bb3379f015f7a7b60501aac8ee61c3e`. The workflow checks package installation, dependency consistency, Python compilation, focused Ruff rules for the new research/stream components and tests, the checked-in regression tests, CLI help, both synthetic research-diagnostic commands and their non-execution output boundaries.
 
 Those checks are useful but limited: the current branch contains 17 checked-in regression cases, not the full reference test suite. The reference archive has 301 unique test cases; archive-side passing results are not evidence that the reconstructed branch passes those tests. No live exchange WebSocket session, provider-side schema compatibility, production execution path or full release gate has been verified.
 
