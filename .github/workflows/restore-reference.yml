@@ -42,13 +42,13 @@ jobs:
               raise SystemExit("Reference payload chunks are missing.")
           payload = base64.b64decode("".join(p.read_text(encoding="ascii").strip() for p in chunks), validate=True)
           digest = hashlib.sha256(payload).hexdigest()
-          expected = "3ec332b948521d14a07781f63970d9017da60274ac08b6177c8d4eabca9d436e"
+          expected = "d362ff8e078e18fce4c79683736963c1ff921166c57ec8e9558362e8c18ce678"
           if digest != expected:
               raise SystemExit(f"Reference payload SHA-256 mismatch: {digest}")
 
           prefix = "ARASH_Foundation_28.0.0/"
           with tempfile.TemporaryDirectory(prefix="arash-reference-") as tmp:
-              with tarfile.open(fileobj=__import__("io").BytesIO(payload), mode="r:gz") as archive:
+              with tarfile.open(fileobj=__import__("io").BytesIO(payload), mode="r:xz") as archive:
                   members = archive.getmembers()
                   for member in members:
                       path = Path(member.name)
@@ -87,7 +87,7 @@ jobs:
 
           - Reference archive: ARASH Foundation 28.0.0
           - Reference ZIP SHA-256: 4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b
-          - Restoration payload SHA-256: 3ec332b948521d14a07781f63970d9017da60274ac08b6177c8d4eabca9d436e
+          - Restoration payload SHA-256: d362ff8e078e18fce4c79683736963c1ff921166c57ec8e9558362e8c18ce678
           - Project version: 28.0.0
 
           The reduced reconstructed source tree was replaced with the checked-in implementation from the reference archive, including the complete CLI, paper broker, SQLite store, supporting modules, sample data, release gate, project metadata, and all 41 test modules.
