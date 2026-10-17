@@ -25,7 +25,7 @@ This roadmap is ambitious by design. It focuses on the combination that distingu
 - [ ] Add Combinatorial Purged Cross-Validation (CPCV) experiments where the dataset and research question support it.
 - [ ] Verify and refine the new CSCV-based Probability of Backtest Overfitting (PBO) workflow; implement Deflated Sharpe Ratio (DSR) with documented assumptions and independent verification.
 - [ ] Add nested model selection, ablation studies, benchmark-relative evaluation and stability checks across time and market regimes.
-- [ ] Add bootstrapped uncertainty intervals, tail-risk summaries, turnover, exposure, capacity and drawdown-recovery metrics.
+- [ ] Verify circular moving-block bootstrap intervals across block-length choices, then extend research uncertainty reporting to tail-risk, turnover, exposure, capacity and drawdown-recovery metrics.
 - [ ] Treat point-in-time feature availability and prevention of label/feature leakage as hard research gates.
 
 ## Workstream 4 — Market-aware strategy intelligence
