@@ -1,0 +1,361 @@
+name: Restore ARASH 28.0.0 reference source
+
+on:
+  push:
+    branches: [source-sync-28.0.0]
+    paths:
+      - ".recovery/**"
+
+permissions:
+  contents: write
+
+jobs:
+  restore-reference:
+    if: ${{ !contains(github.event.head_commit.message, '[reference source restored]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: source-sync-28.0.0
+          fetch-depth: 0
+
+      - id: source
+        name: Wait for all verified archive chunks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = sorted(Path(".recovery").glob("reference.zip.b64.part*"))
+          total = sum(len(x.read_text(encoding="ascii").strip()) for x in p)
+          complete = len(p) == 9 and total == 366328
+          print(f"Archive chunks: {len(p)}/9; encoded characters: {total}/366328")
+          with open(__import__("os").environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"complete={'true' if complete else 'false'}\\n")
+          PY
+
+      - name: Set up Python
+        if: steps.source.outputs.complete == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore reference implementation and integrate the new research layer
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import base64, hashlib, io, json, shutil, tempfile, zipfile
+          from pathlib import Path
+
+          repo = Path.cwd()
+          parts = sorted((repo / ".recovery").glob("reference.zip.b64.part*"))
+          encoded = "".join(p.read_text(encoding="ascii").strip() for p in parts)
+          archive_bytes = base64.b64decode(encoded, validate=True)
+          expected = "679f5a597857fe59a3e34ccd4b832058b7234d999171c74b660c46d7357bad3f"
+          actual = hashlib.sha256(archive_bytes).hexdigest()
+          if actual != expected:
+              raise SystemExit(f"Reference archive SHA-256 mismatch: {actual}")
+          with tempfile.TemporaryDirectory(prefix="arash-reference-") as temp_name:
+              temp = Path(temp_name)
+              extracted = temp / "archive"
+              extracted.mkdir()
+              with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
+                  for info in bundle.infolist():
+                      dest = (extracted / info.filename).resolve()
+                      if extracted.resolve() not in dest.parents and dest != extracted.resolve():
+                          raise SystemExit(f"Unsafe archive path: {info.filename}")
+                  bundle.extractall(extracted)
+              reference = extracted / "ARASH_Foundation_28.0.0"
+              for required in ("src/arash/cli.py", "tests/test_paper_broker.py", "pyproject.toml", "scripts/release_gate.py"):
+                  if not (reference / required).is_file():
+                      raise SystemExit(f"Reference archive missing required path: {required}")
+
+              addons = temp / "addons"
+              addons.mkdir()
+              addon_paths = [
+                  "src/arash/data/streaming.py",
+                  "src/arash/research/pbo.py",
+                  "src/arash/research/return_statistics.py",
+                  "src/arash/research/streaming_features.py",
+                  "tests/test_public_market_stream.py",
+                  "tests/test_research_diagnostics.py",
+                  "sample_data/pbo_demo_candidate_returns.json",
+                  "sample_data/return_stats_demo.json",
+              ]
+              for rel in addon_paths:
+                  src = repo / rel
+                  if not src.is_file():
+                      raise SystemExit(f"Expected additive component is missing: {rel}")
+                  target = addons / rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, target)
+
+              shutil.rmtree(repo / "src/arash", ignore_errors=True)
+              shutil.copytree(reference / "src/arash", repo / "src/arash")
+              shutil.rmtree(repo / "tests", ignore_errors=True)
+              shutil.copytree(reference / "tests", repo / "tests")
+              for rel in ("pyproject.toml", "scripts/release_gate.py"):
+                  dst = repo / rel
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(reference / rel, dst)
+              for folder in ("sample_data", "config", "examples"):
+                  src = reference / folder
+                  dst = repo / folder
+                  if src.exists():
+                      if dst.exists():
+                          shutil.rmtree(dst)
+                      shutil.copytree(src, dst)
+              if (reference / ".env.example").exists():
+                  shutil.copy2(reference / ".env.example", repo / ".env.example")
+              for rel in addon_paths:
+                  src, dst = addons / rel, repo / rel
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, dst)
+
+              # Additive CLI wiring on top of the canonical source CLI.
+              cli_path = repo / "src/arash/cli.py"
+              cli = cli_path.read_text(encoding="utf-8")
+              if "stream_public_market_data" not in cli:
+                  cli = cli.replace("import argparse\\n", "import argparse\\nimport asyncio\\n", 1)
+                  anchor = "from arash import __version__\\n"
+                  if anchor not in cli:
+                      raise SystemExit("Reference CLI import anchor was not found.")
+                  imports = (
+                      "from arash.data.streaming import OrderBookSnapshot, PublicTrade, stream_public_market_data\\n"
+                      "from arash.research.streaming_features import StreamingMicrostructureFeatures\\n"
+                      "from arash.research.pbo import estimate_probability_of_backtest_overfitting\\n"
+                      "from arash.research.return_statistics import bootstrap_return_statistics\\n"
+                  )
+                  cli = cli.replace(anchor, anchor + imports, 1)
+
+              parser_anchor = "    args = parser.parse_args(argv)\\n"
+              if 'subparsers.add_parser("pbo-audit"' not in cli:
+                  parser_additions = '''    pbo_parser = subparsers.add_parser("pbo-audit", help="Estimate backtest-selection instability with CSCV/PBO")
+              pbo_parser.add_argument("path", help="JSON file containing candidate_returns")
+              pbo_parser.add_argument("--blocks", type=int, default=8)
+              pbo_parser.add_argument("--output")
+
+              stats_parser = subparsers.add_parser("return-stats", help="Estimate block-bootstrap return-statistic uncertainty")
+              stats_parser.add_argument("path", help="JSON file containing returns")
+              stats_parser.add_argument("--iterations", type=int, default=2000)
+              stats_parser.add_argument("--block-length", type=int, default=5)
+              stats_parser.add_argument("--confidence-level", type=float, default=0.95)
+              stats_parser.add_argument("--seed", type=int, default=0)
+              stats_parser.add_argument("--periods-per-year", type=int)
+              stats_parser.add_argument("--output")
+
+              stream_parser = subparsers.add_parser("market-stream", help="Stream public order-book and trade data with rolling microstructure features")
+              stream_parser.add_argument("--symbol", required=True, help="Market symbol, for example BTCIRT")
+              stream_parser.add_argument("--max-events", type=int, default=0, help="Stop after this many events; 0 streams until interrupted")
+              stream_parser.add_argument("--max-reconnects", type=int, default=5)
+              stream_parser.add_argument("--depth-levels", type=int, default=10)
+              stream_parser.add_argument("--flow-window-seconds", type=int, default=60)
+
+'''
+                  if cli.count(parser_anchor) != 1:
+                      raise SystemExit("Reference CLI parser insertion anchor was not unique.")
+                  cli = cli.replace(parser_anchor, parser_additions + parser_anchor, 1)
+
+              handler_anchor = "    try:\\n        store = _store_from_args(args)\\n"
+              if 'if args.command == "return-stats":' not in cli:
+                  handler = '''    try:
+              if args.command == "pbo-audit":
+                  input_path = Path(args.path)
+                  if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
+                      raise ValueError("PBO input must be an existing JSON file no larger than 5 MB")
+                  raw_input = input_path.read_bytes()
+                  payload = json.loads(raw_input)
+                  if not isinstance(payload, dict) or not isinstance(payload.get("candidate_returns"), dict):
+                      raise ValueError("PBO input must be a JSON object with a candidate_returns object")
+                  report = estimate_probability_of_backtest_overfitting(payload["candidate_returns"], blocks=args.blocks)
+                  report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
+                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\\n"
+                  if args.output:
+                      output = Path(args.output)
+                      output.parent.mkdir(parents=True, exist_ok=True)
+                      output.write_text(rendered, encoding="utf-8")
+                  print(rendered, end="")
+                  return 0
+
+              if args.command == "return-stats":
+                  input_path = Path(args.path)
+                  if not input_path.is_file() or input_path.stat().st_size > 5_000_000:
+                      raise ValueError("return-statistics input must be an existing JSON file no larger than 5 MB")
+                  raw_input = input_path.read_bytes()
+                  payload = json.loads(raw_input)
+                  if not isinstance(payload, dict) or not isinstance(payload.get("returns"), list):
+                      raise ValueError("return-statistics input must be a JSON object with a returns array")
+                  report = bootstrap_return_statistics(
+                      payload["returns"], iterations=args.iterations, block_length=args.block_length,
+                      confidence_level=args.confidence_level, seed=args.seed,
+                      periods_per_year=args.periods_per_year,
+                  )
+                  report["input_sha256"] = hashlib.sha256(raw_input).hexdigest()
+                  rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\\n"
+                  if args.output:
+                      output = Path(args.output)
+                      output.parent.mkdir(parents=True, exist_ok=True)
+                      output.write_text(rendered, encoding="utf-8")
+                  print(rendered, end="")
+                  return 0
+
+              if args.command == "market-stream":
+                  if args.max_events < 0:
+                      raise ValueError("--max-events must be zero or a positive integer")
+                  if not 1 <= args.depth_levels <= 500:
+                      raise ValueError("--depth-levels must be between 1 and 500")
+                  if not 5 <= args.flow_window_seconds <= 3600:
+                      raise ValueError("--flow-window-seconds must be between 5 and 3600")
+                  features = StreamingMicrostructureFeatures(
+                      window_seconds=args.flow_window_seconds, depth_limit=args.depth_levels
+                  )
+                  stop_event = asyncio.Event()
+                  event_count = 0
+                  async def emit(event: OrderBookSnapshot | PublicTrade) -> None:
+                      nonlocal event_count
+                      payload = features.observe(event)
+                      print(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str), flush=True)
+                      event_count += 1
+                      if args.max_events and event_count >= args.max_events:
+                          stop_event.set()
+                  asyncio.run(stream_public_market_data(
+                      args.symbol, emit, on_trade=emit, stop_event=stop_event,
+                      max_reconnects=args.max_reconnects,
+                  ))
+                  return 0
+
+              store = _store_from_args(args)
+'''
+                  if handler_anchor not in cli:
+                      raise SystemExit("Reference CLI dispatch anchor was not found.")
+                  cli = cli.replace(handler_anchor, handler, 1)
+              cli = cli.replace(
+                  "except (OSError, ValueError, sqlite3.Error, ArithmeticError) as exc:",
+                  "except (OSError, ValueError, RuntimeError, sqlite3.Error, ArithmeticError) as exc:",
+              )
+              cli_path.write_text(cli, encoding="utf-8")
+
+              pyproject = repo / "pyproject.toml"
+              pytext = pyproject.read_text(encoding="utf-8")
+              if "marketstream =" not in pytext:
+                  pytext = pytext.replace(
+                      'dev = ["pytest>=8.0", "ruff>=0.6"]\\n',
+                      'dev = ["pytest>=8.0", "ruff>=0.6"]\\nmarketstream = ["websockets>=13.0"]\\n',
+                      1,
+                  )
+              pyproject.write_text(pytext, encoding="utf-8")
+
+              # Keep the reference suite's explicit grouping-coverage gate aware of the two additive test files.
+              gate_path = repo / "scripts/release_gate.py"
+              gate = gate_path.read_text(encoding="utf-8")
+              if "tests/test_public_market_stream.py" not in gate:
+                  gate = gate.replace(
+                      '"tests/test_mark_freshness.py", "tests/test_paper_currency_contract.py",',
+                      '"tests/test_mark_freshness.py", "tests/test_paper_currency_contract.py", "tests/test_public_market_stream.py",',
+                      1,
+                  )
+              if "tests/test_research_diagnostics.py" not in gate:
+                  gate = gate.replace(
+                      '"tests/test_release_gate.py",',
+                      '"tests/test_release_gate.py", "tests/test_research_diagnostics.py",',
+                      1,
+                  )
+              gate_path.write_text(gate, encoding="utf-8")
+
+              # Remove source archive chunks from the working tree after integrity-checked extraction.
+              # Git history is retained for traceability; the following commit removes chunks from the branch head.
+              for part in parts:
+                  part.unlink()
+
+          # Update documentation with the source restoration details.
+          manifest_path = repo / "docs/SOURCE_SYNC_MANIFEST.md"
+          if manifest_path.exists():
+              manifest_path.write_text('''# Source Synchronization Manifest
+
+## Identity
+
+- Reference version: ARASH Foundation 28.0.0
+- Reference archive SHA-256: 679f5a597857fe59a3e34ccd4b832058b7234d999171c74b660c46d7357bad3f
+- Work branch: source-sync-28.0.0
+- Pull request: https://github.com/pffoijeguff/ARASH-/pull/1
+- Method: restore canonical source and tests from the checksum-verified archive, then add the public-stream and statistical diagnostics as explicitly additive components.
+
+## Canonical source reconciliation
+
+The canonical package, original test suite, configuration example, sample datasets, packaging metadata, and release-gate script were restored directly from the archive after verifying the exact ZIP SHA-256. The original feature surface is preserved; ARASH's public-stream, CSCV/PBO and moving-block-bootstrap functionality remains an additive layer.
+
+The integration workflow runs the full release gate on Python 3.13 before creating the source-restoration commit. The main branch is not changed by this workflow.
+
+## Integration boundaries
+
+- The public market stream only consumes the public order book and public trade channel.
+- The new diagnostics report descriptive or statistical evidence; they do not create trading actions.
+- Passing checks is software evidence, not evidence of market alpha or future profitability.
+- The WebSocket integration is validated against mocked/documented payload formats and does not claim that a live provider session has been verified.
+''', encoding="utf-8")
+          audit_path = repo / "docs/INTEGRATION_AUDIT.md"
+          audit_path.write_text('''# Integration Audit — ARASH Foundation 28.0.0
+
+**Scope:** source parity, component wiring, regression tests and merge decision.
+
+The development branch restores the canonical 28.0.0 source tree and complete reference test suite from a SHA-256-verified archive, while retaining the new read-only market-stream and quantitative-diagnostics features as additive modules.
+
+## Checks
+
+The restoration workflow validates archive integrity and safe paths; runs compilation; installs the package plus development/market-stream extras; checks dependency consistency; runs Ruff; executes all grouped original tests and the additive regression tests; verifies the main CLI entry point and the new PBO/bootstrap commands; builds a wheel and performs the original release-gate smoke scenarios. The generated release-gate artifact is committed with the restored source only if the gate passes.
+
+The detailed machine-readable run evidence is in `artifacts/release-gate-branch.json` and the linked GitHub Actions run. A clean result validates only tested software behavior under the specified conditions. It does not establish profitability, production order execution or live exchange WebSocket compatibility.
+
+## Merge decision
+
+Do not merge unless the restore workflow and branch CI pass on the exact final PR head and the final diff is rechecked against `main`. The public market stream is read-only. There is no claim of production live-order execution.
+''', encoding="utf-8")
+          print("Reference archive verified; restoration tree prepared for full quality gates.")
+          PY
+
+      - name: Install project and development dependencies
+        if: steps.source.outputs.complete == 'true'
+        run: python -m pip install -e ".[dev,marketstream]"
+
+      - name: Check dependencies and compile source
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          python -m pip check
+          python -m compileall -q src tests scripts
+
+      - name: Run full release gate (all reference and additive tests)
+        if: steps.source.outputs.complete == 'true'
+        run: python scripts/release_gate.py --output artifacts/release-gate-branch.json --jobs 4 --pytest-timeout-seconds 240
+
+      - name: Verify additive CLI integration
+        if: steps.source.outputs.complete == 'true'
+        run: |
+          python -m arash --help
+          python -m arash pbo-audit sample_data/pbo_demo_candidate_returns.json --blocks 8 --output "$RUNNER_TEMP/pbo.json"
+          python -m arash return-stats sample_data/return_stats_demo.json --iterations 250 --block-length 5 --seed 17 --output "$RUNNER_TEMP/return-stats.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          pbo = json.loads((root / "pbo.json").read_text())
+          stats = json.loads((root / "return-stats.json").read_text())
+          assert pbo["status"] == "COMPLETED_DIAGNOSTIC"
+          assert pbo["trade_action"] == "NONE" and pbo["execution_enabled"] is False
+          assert stats["status"] == "COMPLETED_DIAGNOSTIC"
+          assert stats["trade_action"] == "NONE" and stats["execution_enabled"] is False
+          assert len(stats["input_sha256"]) == 64
+          PY
+
+      - name: Commit source only when the full gate passes
+        if: steps.source.outputs.complete == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/arash tests scripts/release_gate.py sample_data config examples pyproject.toml .env.example docs/SOURCE_SYNC_MANIFEST.md docs/INTEGRATION_AUDIT.md artifacts/release-gate-branch.json
+          git add -u .recovery
+          git commit -m "fix: restore canonical 28.0.0 source and tests [reference source restored]"
+          git push origin HEAD:source-sync-28.0.0
