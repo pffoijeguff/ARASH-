@@ -52,7 +52,7 @@ jobs:
               raise SystemExit("Reference archive parts are missing.")
           encoded = "".join("".join(p.read_text(encoding="ascii").split()) for p in parts)
           archive_bytes = base64.b64decode(encoded, validate=True)
-          expected_sha256 = "23daa1c6d03f99431aed468c36229b1bd2e073525b3792a892ef82436ae21a73"
+          expected_sha256 = "3042873cd1838151638216d5dcf4268fb0e82dc58dc9de13331468877d32245a"
           observed_sha256 = hashlib.sha256(archive_bytes).hexdigest()
           if observed_sha256 != expected_sha256:
               raise SystemExit(f"Reference archive SHA-256 mismatch: {observed_sha256}")
