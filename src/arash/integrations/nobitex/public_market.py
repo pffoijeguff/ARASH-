@@ -227,6 +227,8 @@ def fetch_public_candles(
         raise ValueError(f"unsupported Nobitex interval '{interval}'; supported: {supported}")
     if isinstance(to_epoch, bool) or not isinstance(to_epoch, int) or to_epoch <= 0:
         raise ValueError("to_epoch must be a positive Unix timestamp in seconds")
+    if to_epoch > int(datetime.now(timezone.utc).timestamp()):
+        raise ValueError("to_epoch cannot be in the future; future-dated market data is not admissible")
     if from_epoch is not None and (
         isinstance(from_epoch, bool) or not isinstance(from_epoch, int) or from_epoch <= 0
     ):
