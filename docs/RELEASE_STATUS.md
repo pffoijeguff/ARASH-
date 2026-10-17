@@ -1,23 +1,25 @@
-# Release Status — 28.0.0
+# Source Sync Status — ARASH Foundation 28.0.0
 
-## Package identity
+## Current state
 
-- Version: `28.0.0`
-- Python requirement: `>=3.12`
-- Verification evidence date: 2026-10-16
-- Evidence file: `artifacts/release-gate-28.0.0.json`
-- Source archive SHA-256: `4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b`
+This branch (source-sync-28.0.0) is a partial, public source-synchronization branch derived from the cleaned 28.0.0 reference package. It adds the staged CLI and selected data-quality, read-only market-data, risk-sizing, and offline execution modules.
 
-## Archived verification results
+**It is not yet a complete runnable mirror of the reference archive.** The full persistent paper broker, the complete SQLite market-data store, several research modules and the archived tests are not all present in this Git branch.
 
-The provided archive records a run on CPython 3.13.5 with network access disabled and no live orders submitted: 24 checks passed, 0 failed, and 1 was incomplete because Ruff was not installed. The archive also records 301 passing pytest cases, 11/11 smoke checks, successful compilation, and successful wheel-artifact/isolated-install checks.
+## Verification policy
 
-These results describe the supplied archive, not a freshly executed CI run from the public repository. The complete suite was not revalidated in this packaging environment; a local full-suite attempt exceeded the available execution window. Python 3.12 and hosted GitHub Actions remain unverified until CI completes. The release should therefore be considered **incomplete pending fresh CI verification**.
+Per the current source-transfer task, automated tests are not a blocker for this synchronization pass and have not been run against this branch. Therefore this page makes no claim that the branch passes the test suite, lint, installation, or hosted CI.
 
-## Before declaring the release verified
+Archived evidence for the supplied 28.0.0 ZIP is documented separately below for provenance only:
+- Archive SHA-256: 4e0a677eb6a5438068609dc392f58c312066604ddde13641ed23fe627085d04b
+- The archive recorded 301 passing tests, 11/11 smoke checks, 24 release-gate checks passed, zero failed and one incomplete because Ruff was unavailable.
+- Those archived results are not results for this Git branch.
+- Fresh release verification and the complete source synchronization are still outstanding.
 
-1. Run the release gate from a clean environment on Python 3.12 and 3.13.
-2. Install Ruff and resolve lint findings.
-3. Confirm both GitHub Actions matrix jobs pass.
-4. Review the generated reports and publish the new artifacts.
-5. Resolve the project license declaration before encouraging redistribution.
+## Remaining source synchronization
+
+1. Add the full SQLite market-data store and persistent paper broker.
+2. Add the remaining research modules and original command coverage.
+3. Compare the synchronized file set against the cleaned archive manifest.
+4. Review packaging and CI only after code transfer is complete.
+5. Keep live order submission out of scope.

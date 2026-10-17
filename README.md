@@ -1,81 +1,60 @@
 # ARASH Foundation
 
-**An offline-first quantitative research and paper-trading framework.**
+**An offline-first quantitative research and paper-simulation framework.**
 
-ARASH Foundation provides a reproducible environment for historical market-data research, backtesting, risk diagnostics, simulated execution, portfolio analysis, and auditable local research records. The project is designed to make assumptions and limitations explicit rather than treating a backtest as evidence of future performance.
+ARASH Foundation is being synchronized into this repository from the 28.0.0 reference archive. This branch contains the public documentation and a staged source foundation. It is a work branch, not a verified release.
 
-> **Research-only boundary:** ARASH Foundation 28.0.0 is intended for offline research and paper simulation. It does not support live order submission. It is not financial advice and does not establish a profitable trading strategy.
+> **Research-only boundary:** This project is intended for offline analysis and paper simulation. It does not support live order submission. It is not financial advice and does not establish a profitable trading strategy.
 
-## Project scope
+## Commands in the staged source branch
 
-- **Market-data validation:** CSV parsing, data-quality checks, session-aware validation, reconciliation, and content-addressed snapshots.
-- **Quantitative research:** Backtests, walk-forward evaluation, cost sensitivity, prefix-invariance checks, strategy comparisons, and selection-bias diagnostics.
-- **Risk controls:** Explicit risk inputs, portfolio-exposure checks, drawdown diagnostics, stress testing, and paper-broker safeguards.
-- **Simulated execution:** Paper-order workflows and modeled execution constraints; fills are simulated, not exchange-confirmed.
-- **Auditability:** Local SQLite records, reproducible manifests, release-gate checks, and test evidence.
-- **Optional read-only data access:** Public market-data connectors are opt-in. Research can also run against local sample data without network access.
+    python -m venv .venv
+    source .venv/bin/activate
+    python -m pip install -e ".[dev]"
+    python -m arash --help
 
-## Quick start
+The currently staged CLI focuses on:
+- **csv-health:** audit local OHLCV CSV data and identify structural issues, timestamp problems, gaps and stale observations.
+- **csv-validate:** load strict OHLCV CSV rows before downstream research.
+- **market-fetch:** optional, bounded, read-only public candle retrieval.
+- **risk-check:** calculate hypothetical long-only sizing under explicit stop, exposure and loss assumptions.
+- **execution-simulate:** generate an offline candle-based simulated execution report.
+- **execution-stress:** compare explicit modeled execution-cost and participation scenarios.
 
-**Requirements:** Python 3.12 or newer.
+Examples:
 
-```bash
-python -m venv .venv
-# Linux / macOS
-source .venv/bin/activate
-# Windows PowerShell: .venv\\Scripts\\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-python -m arash --help
-```
+    python -m arash csv-health sample_data/example_candles.csv
+    python -m arash csv-validate sample_data/example_candles.csv
 
-Run the automated tests:
+These commands do not submit trades. Market fetch is read-only; analysis and execution reports are conditional on their declared input data and assumptions.
 
-```bash
-python -m pytest -q
-```
+## Current branch state
 
-Run the local release gate (writes a generated JSON report):
-
-```bash
-python scripts/release_gate.py --output artifacts/release-gate-local.json
-```
-
-Generated databases, credentials, local environment files, build outputs, and release-gate results are excluded from version control by default. A placeholder `.env.example` is included; it contains no credentials.
+This branch is a source-synchronization work in progress. The archive's full persistent broker, SQLite market-data store, and complete research command suite are not yet all present in this Git branch, so this branch must not be treated as a complete replacement for the downloaded source package. No test suite or release gate is being used as a blocker for source transfer; fresh verification remains a later release step.
 
 ## Repository map
 
-```text
-src/arash/                 Application package
-  data/                    Loaders, quality checks, snapshots, and sync helpers
-  research/                Backtesting, evaluation, robustness, and quant audits
-  risk/                    Risk assessment and stress diagnostics
-  paper/                   Simulated broker and execution models
-  storage/                 Local SQLite schema and persistence
-  integrations/            Optional read-only public market-data adapters
-tests/                     Automated test suite
-scripts/release_gate.py    Reproducible local release checks
-sample_data/               Synthetic demonstration data
-config/                    Example-only configuration
-docs/                      Architecture, research protocol, and safety notes
-artifacts/                 Sanitized release-gate evidence for 28.0.0
-```
+    src/arash/cli.py                       Staged command-line interface
+    src/arash/data/                        CSV validation, health, snapshots and connectors
+    src/arash/domain/                      Decimal-based domain models
+    src/arash/integrations/nobitex/        Optional read-only public market-data client
+    src/arash/paper/execution.py           Offline candle-based execution simulation
+    src/arash/paper/execution_stress.py    Execution sensitivity scenarios
+    src/arash/risk/                        Sizing, persisted-snapshot audit and stress analysis
+    src/arash/safety/                      Research/paper operating-mode guard
+    docs/                                  Architecture, risk and research documentation
+    sample_data/                           Synthetic or demonstration inputs
 
-## Quality evidence and limitations
+## Risk and reproducibility
 
-The included release-gate artifact records an archived run from **2026-10-16** using CPython 3.13.5: 24 checks passed, 0 failed, and 1 remained incomplete because Ruff was unavailable in that environment. The archive records 301 passing tests and 11/11 smoke checks. These are **archived results**, not a claim that the suite was rerun against every current development environment. Python 3.12 and hosted GitHub Actions must be verified by CI before the release can be considered fully verified. See [release status](docs/RELEASE_STATUS.md).
+- Keep dataset identity, timestamp semantics, assumptions, fees and simulated costs explicit.
+- Do not treat backtests, stress scenarios or risk estimates as guarantees.
+- Data hashes establish byte-level identity, not source authenticity.
+- Paper fills and simulated stops are not real execution outcomes.
+- Do not commit API credentials, private account data, local ledgers or unreviewed datasets.
 
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Research protocol](docs/RESEARCH_PROTOCOL.md)
-- [Risk and safety boundaries](docs/RISK_AND_SAFETY.md)
-- [Release status](docs/RELEASE_STATUS.md)
-- [Roadmap](ROADMAP.md)
-- [Changelog](CHANGELOG.md)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
+See Architecture, Research Protocol, Risk and Safety, and Release Status in the docs folder.
 
 ## License
 
-No explicit open-source license has been supplied with this archive. The repository owner should choose and add a license before granting permission for external reuse or redistribution.
+The project owner has not yet supplied an explicit license for external reuse or redistribution.

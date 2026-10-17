@@ -1,4 +1,4 @@
-name: ARASH quality gates
+name: Source synchronization sanity check
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  quality:
-    name: Python ${{ matrix.python-version }}
+  package-smoke:
+    name: Python ${{ matrix.python-version }} — package and CLI smoke check
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -25,15 +25,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install project and development tools
-        run: python -m pip install -e ".[dev]"
-      - name: Run full local-only release gate
-        run: python scripts/release_gate.py --output artifacts/release-gate-${{ matrix.python-version }}.json --pytest-timeout-seconds 240
-      - name: Upload release-gate evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: arash-release-gate-python-${{ matrix.python-version }}
-          path: artifacts/release-gate-${{ matrix.python-version }}.json
-          if-no-files-found: warn
-          retention-days: 30
+      - name: Install package
+        run: python -m pip install .
+      - name: Compile the staged source tree
+        run: python -m compileall -q src
+      - name: Verify CLI entry point
+        run: python -m arash --help
