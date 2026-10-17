@@ -10,7 +10,7 @@ ARASH's initial public order-book stream is an online market-observation compone
 4. Emit structured JSON observations with exchange timestamp, local receive timestamp and the provider publication offset when available.
 5. Reconnect under a bounded backoff after a stream failure; ignore snapshots that arrive with an exchange timestamp older than the last delivered snapshot.
 
-The current adapter uses the public Nobitex endpoint and public channel only. Its streaming path accepts no API credentials and exposes no order-submission methods. Official provider documentation:
+The current adapter uses the public Nobitex endpoint and public order-book/trades channels only. Its streaming path accepts no API credentials and exposes no order-submission methods. Official provider documentation:
 - [Nobitex public market-data API](https://github.com/nobitex/docs-api/blob/master/source/includes/_market_data.md)
 - [Nobitex WebSocket protocol and public channels](https://github.com/nobitex/docs-api/blob/master/source/includes/_websocket.md)
 
@@ -69,3 +69,5 @@ Install the optional dependency and stream ten events:
     python -m arash market-stream --symbol BTCIRT --max-events 10 --depth-levels 10
 
 The output reports observations only. It does not issue trading recommendations or submit orders.
+
+The same WebSocket connection subscribes to the documented `public:trades-SYMBOL` channel. Each event is enriched by a bounded rolling window with reported buy/sell volume and quote notional, reported-side notional imbalance, rolling trade VWAP, and the latest order-book context when available. The reported-side fields are kept explicitly descriptive; this does not establish buyer/seller aggressor intent or a profitable trading edge.
