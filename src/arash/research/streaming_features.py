@@ -7,14 +7,13 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from arash.data.streaming import OrderBookSnapshot, PublicTrade
 
 ZERO = Decimal("0")
-ONE = Decimal("1")
 
 
 class StreamingMicrostructureFeatures:
@@ -42,6 +41,10 @@ class StreamingMicrostructureFeatures:
         self._event_watermark: datetime | None = None
         self._late_trade_events = 0
         self._pruned_trade_events = 0
+        self._buy_volume = ZERO
+        self._sell_volume = ZERO
+        self._buy_notional = ZERO
+        self._sell_notional = ZERO
 
     def observe(self, event: OrderBookSnapshot | PublicTrade) -> dict[str, Any]:
         """Return the raw event plus bounded, descriptive rolling market features."""
@@ -72,14 +75,17 @@ class StreamingMicrostructureFeatures:
                 else:
                     timestamps.append(event.exchange_timestamp)
                     self._trades.append(event)
+                self._add_trade_totals(event)
                 while len(self._trades) > self.max_trade_events:
-                    self._trades.popleft()
+                    oldest = self._trades.popleft()
                     self._trade_timestamps.pop(0)
+                    self._remove_trade_totals(oldest)
                     self._pruned_trade_events += 1
 
         while self._trade_timestamps and self._trade_timestamps[0] < cutoff:
             self._trade_timestamps.pop(0)
-            self._trades.popleft()
+            oldest = self._trades.popleft()
+            self._remove_trade_totals(oldest)
             self._pruned_trade_events += 1
 
         payload["microstructure_features"] = self._feature_snapshot(event)
@@ -89,14 +95,10 @@ class StreamingMicrostructureFeatures:
         return payload
 
     def _feature_snapshot(self, event: OrderBookSnapshot | PublicTrade) -> dict[str, Any]:
-        buy_volume = sum((trade.volume for trade in self._trades if trade.side == "buy"), ZERO)
-        sell_volume = sum((trade.volume for trade in self._trades if trade.side == "sell"), ZERO)
-        buy_notional = sum(
-            (trade.quote_notional for trade in self._trades if trade.side == "buy"), ZERO
-        )
-        sell_notional = sum(
-            (trade.quote_notional for trade in self._trades if trade.side == "sell"), ZERO
-        )
+        buy_volume = self._buy_volume
+        sell_volume = self._sell_volume
+        buy_notional = self._buy_notional
+        sell_notional = self._sell_notional
         total_volume = buy_volume + sell_volume
         total_notional = buy_notional + sell_notional
         quote_imbalance = (
@@ -105,7 +107,7 @@ class StreamingMicrostructureFeatures:
             else ZERO
         )
         flow_vwap = total_notional / total_volume if total_volume > ZERO else None
-        event_at = event.exchange_timestamp
+        event_at = self._event_watermark or event.exchange_timestamp
         latest_trade = self._trades[-1] if self._trades else None
         book = self._latest_book
         book_data: dict[str, Any] | None = None
