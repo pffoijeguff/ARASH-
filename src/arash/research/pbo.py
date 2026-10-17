@@ -9,12 +9,8 @@ from collections.abc import Mapping, Sequence
 from itertools import combinations
 from math import comb, isfinite, sqrt
 from statistics import fmean
+from decimal import Decimal
 from typing import Any
-
-try:
-    from decimal import Decimal
-except ImportError:  # pragma: no cover - Decimal is part of every supported Python.
-    Decimal = None  # type: ignore[assignment,misc]
 
 
 def _coerce_series(candidate: str, values: Sequence[object]) -> tuple[float, ...]:
@@ -95,9 +91,9 @@ def estimate_probability_of_backtest_overfitting(
     if type(max_work_units) is not int or max_work_units < 1:
         raise ValueError("max_work_units must be a positive integer")
 
-    names = sorted(candidate_returns)
-    if any(not isinstance(name, str) or not name.strip() for name in names):
+    if any(not isinstance(name, str) or not name.strip() for name in candidate_returns):
         raise ValueError("candidate identifiers must be non-empty strings")
+    names = sorted(candidate_returns)
     series = {name: _coerce_series(name, candidate_returns[name]) for name in names}
     lengths = {len(values) for values in series.values()}
     if len(lengths) != 1:
