@@ -1,30 +1,31 @@
 # Changelog
 
-Notable changes are listed here. Version numbers refer to the recorded ARASH Foundation reference snapshots; they do not imply that the source for that version has been released from this GitHub repository.
+Version numbers refer to the corresponding ARASH Foundation source snapshots. A snapshot version does not imply that the source has already been synchronized into this GitHub repository.
 
-## ARASH Foundation 30.0.0 — 2026-10-16
+## ARASH Foundation 28.0.0 — 2026-10-16
 
-### Added
+### Risk sizing correction
 
-- Research Evidence Engine: assemble a sealed dossier from up to 12 local JSON research reports.
-- Strict JSON parsing, bounded report inputs of 10 MiB per report, and SHA-256 identities for supplied artifacts.
-- Evidence checks for dataset and configuration provenance, chronological out-of-sample validation, recognized look-ahead checks, multiple-testing or selection-bias diagnostics, transaction-cost robustness, and offline/input-quality guardrails.
-- `arash verify-research-evidence` to verify the dossier and the exact name, size, and bytes of supplied report artifacts, with optional dataset/protocol file linkage.
-- Regression coverage for missing evidence, mismatched datasets, failed audits, unsafe markers, malformed reports, tampering, and CLI behavior.
+- Fixed per-instrument position-cap sizing so existing exposure in the same instrument is deducted before sizing an additional BUY.
+- The paper broker passes marked same-instrument exposure into the risk engine.
+- The advisory `risk-check` CLI exposes `--current-position-exposure`.
+- Added validation that same-instrument exposure cannot exceed total portfolio exposure.
+- Added regression tests for incremental-position cap enforcement and invalid exposure inputs.
 
-### Verification status
+### Recorded verification
 
-- 310 automated tests reported passing across 10 isolated groups.
-- 12 of 12 local smoke checks reported passing; no live orders were submitted.
-- Compilation, wheel integrity, and isolated installation/import reported passing.
-- Ruff remained unavailable; Python 3.12 and hosted CI were not verified.
-- Overall release gate remained `INCOMPLETE` with 25 checks passed, 0 failed, and 1 incomplete.
+- 301 tests passed across 10 pytest groups.
+- 11 of 11 local smoke checks passed.
+- Python compilation, wheel integrity, and isolated install/import passed in the recorded environment.
+- Ruff was unavailable.
+- Python 3.12 and hosted CI were not independently verified.
+- Overall release gate: `INCOMPLETE` — 24 passed, 0 failed, 1 incomplete.
+
+### Documentation preparation
+
+- Updated the public project overview and documentation to describe the supplied 28.0.0 archive.
+- Explicitly documented that source synchronization into this GitHub repository remains outstanding.
 
 ### Limits
 
-`RESEARCH_REVIEWABLE` means only that the configured evidence checklist passed. It is not proof of profitability, future returns, live-execution safety, report-author authenticity, or trading authorization. The reference snapshot remains offline-only.
-
-## Documentation publication — 2026-10-17
-
-- Expanded the public project overview and documented the logical architecture, research protocol, risk boundary, release limitations, roadmap, contribution expectations, and security-reporting guidance.
-- Recorded explicitly that the source archive has not yet been synchronized into this repository and that archive-level test results are not GitHub-tree CI results.
+These checks validate software behavior in the recorded environment. They do not establish trading profitability, guarantee future results, or authorize live trading.
