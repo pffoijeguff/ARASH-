@@ -9,12 +9,14 @@ import asyncio
 import inspect
 import json
 import re
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Awaitable, Callable
 
-NOBITEX_WEBSOCKET_URL = "wss://wss.nobitex.ir/connection/websocket"
+NOBITEX_WEBSOCKET_URL = "wss://ws.nobitex.ir/connection/websocket"
 MAX_MESSAGE_BYTES = 2_000_000
 MAX_BOOK_LEVELS = 500
 SYMBOL_PATTERN = re.compile(r"^[A-Z0-9]{3,20}$")
@@ -146,7 +148,8 @@ class OrderBookSnapshot:
             "symbol": self.symbol,
             "exchange_timestamp": self.exchange_timestamp.isoformat(),
             "received_at": self.received_at.isoformat(),
-            "feed_lag_ms": int((self.received_at - self.exchange_timestamp).total_seconds() * 1000),
+            "feed_lag_ms": max(0, int((self.received_at - self.exchange_timestamp).total_seconds() * 1000)),
+            "clock_skew_ms": int((self.exchange_timestamp - self.received_at).total_seconds() * 1000),
             "update_offset": self.update_offset,
             "best_bid": str(self.best_bid),
             "best_bid_quantity": str(best_bid_quantity),
@@ -308,6 +311,74 @@ def parse_public_orderbook_message(
     )
 
 
+def fetch_initial_public_orderbook(
+    symbol: str,
+    *,
+    timeout_seconds: float = 8.0,
+) -> OrderBookSnapshot:
+    """Fetch one bounded, unauthenticated REST snapshot to seed an online book."""
+    normalized_symbol = _valid_symbol(symbol)
+    if not 0.5 <= timeout_seconds <= 20:
+        raise ValueError("timeout_seconds must be between 0.5 and 20 seconds")
+    request = Request(
+        f"https://apiv2.nobitex.ir/v3/orderbook/{normalized_symbol}",
+        headers={"Accept": "application/json", "User-Agent": "ARASH-public-market-data/1.0"},
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw = response.read(MAX_MESSAGE_BYTES + 1)
+    except HTTPError as exc:
+        raise PublicMarketStreamError(
+            f"Public order-book bootstrap returned HTTP {exc.code}"
+        ) from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise PublicMarketStreamError(
+            f"Public order-book bootstrap could not complete: {exc}"
+        ) from exc
+    if len(raw) > MAX_MESSAGE_BYTES:
+        raise PublicMarketStreamError("Public order-book bootstrap exceeded the size limit")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PublicMarketStreamError("Public order-book bootstrap was not valid UTF-8 JSON") from exc
+    if not isinstance(data, dict) or data.get("status") != "ok":
+        raise PublicMarketStreamError("Public order-book bootstrap returned an invalid response")
+    raw_timestamp = data.get("lastUpdate")
+    if isinstance(raw_timestamp, bool) or not isinstance(raw_timestamp, (int, str)):
+        raise PublicMarketStreamError("REST lastUpdate must be a Unix timestamp in milliseconds")
+    try:
+        timestamp_ms = int(raw_timestamp)
+        exchange_timestamp = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError) as exc:
+        raise PublicMarketStreamError("REST lastUpdate is not a valid Unix timestamp") from exc
+    if timestamp_ms <= 0:
+        raise PublicMarketStreamError("REST lastUpdate must be a positive Unix timestamp")
+    try:
+        bids = _parse_levels(data.get("bids"), side="bids")
+        asks = _parse_levels(data.get("asks"), side="asks")
+        if bids[0].price >= asks[0].price:
+            raise ValueError("REST snapshot contains a crossed or locked order book")
+        raw_last_trade = data.get("lastTradePrice")
+        last_trade = (
+            _positive_decimal(raw_last_trade, "lastTradePrice")
+            if raw_last_trade not in (None, "")
+            else None
+        )
+        return OrderBookSnapshot(
+            symbol=normalized_symbol,
+            source="nobitex-public-rest-snapshot",
+            exchange_timestamp=exchange_timestamp,
+            received_at=datetime.now(timezone.utc),
+            bids=bids,
+            asks=asks,
+            last_trade_price=last_trade,
+            update_offset=None,
+        )
+    except ValueError as exc:
+        raise PublicMarketStreamError(f"Invalid REST order-book snapshot: {exc}") from exc
+
+
 async def _deliver(
     callback: Callable[[OrderBookSnapshot], object],
     snapshot: OrderBookSnapshot,
@@ -397,13 +468,30 @@ async def stream_public_orderbook(
                 await websocket.send(
                     json.dumps({"id": 2, "subscribe": {"channel": channel}})
                 )
+                last_snapshot_at: datetime | None = None
+
+                async def deliver_monotonic(snapshot: OrderBookSnapshot) -> None:
+                    nonlocal last_snapshot_at
+                    if last_snapshot_at is not None and snapshot.exchange_timestamp < last_snapshot_at:
+                        return
+                    last_snapshot_at = snapshot.exchange_timestamp
+                    await _deliver(on_snapshot, snapshot)
+
                 await _wait_for_ack(
                     websocket,
                     request_id=2,
                     symbol=normalized_symbol,
-                    callback=on_snapshot,
+                    callback=deliver_monotonic,
                     stop_event=stop_event,
                 )
+                if stop_event is not None and stop_event.is_set():
+                    return
+
+                initial_snapshot = await asyncio.to_thread(
+                    fetch_initial_public_orderbook,
+                    normalized_symbol,
+                )
+                await deliver_monotonic(initial_snapshot)
                 if stop_event is not None and stop_event.is_set():
                     return
 
@@ -426,7 +514,7 @@ async def stream_public_orderbook(
                         continue
                     snapshot = parse_public_orderbook_message(normalized_symbol, raw_message)
                     if snapshot is not None:
-                        await _deliver(on_snapshot, snapshot)
+                        await deliver_monotonic(snapshot)
                         reconnects = 0
         except asyncio.CancelledError:
             raise
