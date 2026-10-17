@@ -22,6 +22,7 @@ from arash.research.backtest import BacktestConfig, run_backtest
 from arash.research.evaluation import evaluate_chronological_holdout
 from arash.research.intelligence import build_market_intelligence
 from arash.research.lab import run_experiment_grid
+from arash.research.watch import state_from_market_report, evaluate_state_change
 from arash.research.portfolio import summarize_backtests
 from arash.research.quant_audit import audit_backtest_result
 from arash.research.regimes import analyze_market_regimes
@@ -219,6 +220,14 @@ def build_parser() -> argparse.ArgumentParser:
     paper_register.add_argument("--symbol", required=True)
     paper_register.add_argument("--base-currency", required=True)
     paper_register.add_argument("--quote-currency", required=True)
+    paper_instruments = commands.add_parser("paper-instruments", help="List registered paper instrument currency contracts")
+    paper_instruments.add_argument("--db", required=True)
+
+    market_watch = commands.add_parser("market-watch", help="Compare a current market report with a previous report")
+    market_watch.add_argument("current_report")
+    market_watch.add_argument("--previous-report")
+    market_watch.add_argument("--price-move-threshold-pct", type=_decimal, default=Decimal("5.0"))
+    market_watch.add_argument("--output")
 
     paper_order = commands.add_parser("paper-order", help="Record a risk-gated local simulated spot order")
     paper_order.add_argument("--db", required=True)
@@ -500,8 +509,36 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(result, args.output)
             return 0
 
+        if args.command == "market-watch":
+            def read_report(path: str) -> dict[str, Any]:
+                report_path = Path(path)
+                if not report_path.is_file() or report_path.stat().st_size > 2_000_000:
+                    raise ValueError("market report must be an existing file smaller than 2 MB")
+                payload = json.loads(report_path.read_text(encoding="utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("market report must be a JSON object")
+                return payload
+            current_report = read_report(args.current_report)
+            current_state = state_from_market_report(current_report)
+            previous_state = state_from_market_report(read_report(args.previous_report)) if args.previous_report else None
+            alerts = evaluate_state_change(
+                current_state, previous_state,
+                price_move_threshold_pct=args.price_move_threshold_pct,
+            )
+            _print_json({
+                "schema_version": 1,
+                "mode": "market_state_change_diagnostics",
+                "current_state": current_state,
+                "previous_state": previous_state,
+                "alerts": alerts,
+                "trade_action": "NONE",
+                "execution_enabled": False,
+                "note": "Alerts report observable data/regime changes only; they are not trade signals.",
+            }, args.output)
+            return 0
+
         if args.command in {
-            "paper-account-create","paper-instrument-register","paper-order","paper-status",
+            "paper-account-create","paper-instrument-register","paper-instruments","paper-order","paper-status",
             "paper-history","paper-snapshots","paper-risk-audit","paper-risk-stress","paper-risk-reset"
         }:
             return int(handle_paper_command(args) or 0)
